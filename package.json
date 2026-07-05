@@ -9,7 +9,7 @@
     "main": "dist-main/index.js",
     "scripts": {
         "build": "vite build",
-        "check": "pnpm lint && pnpm typecheck && pnpm prettier:check && pnpm test",
+        "check": "npm lint && npm typecheck && npm prettier:check && npm test",
         "dev": "vite",
         "lint": "eslint .",
         "package:publish": "electron-builder --config electron-builder.config.js --publish always",
@@ -19,7 +19,7 @@
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest",
         "test": "vitest run",
-        "typecheck": "pnpm typecheck:main && pnpm typecheck:preload && pnpm typecheck:renderer",
+        "typecheck": "npm typecheck:main && npm typecheck:preload && npm typecheck:renderer",
         "typecheck:main": "tsc -p src/main/tsconfig.json --noEmit",
         "typecheck:preload": "tsc -p src/preload/tsconfig.json --noEmit",
         "typecheck:renderer": "tsc -p src/renderer/tsconfig.json --noEmit"
