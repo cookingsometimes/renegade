@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "allowSyntheticDefaultImports": true,
+        "composite": true,
+        "module": "ESNext",
+        "paths": {
+            "@common/*": ["./src/common/*"]
+        },
+        "resolveJsonModule": true,
+        "rootDir": "./src",
+        "skipLibCheck": true,
+        "strict": true
+    },
+    "exclude": ["fixes"]
+}

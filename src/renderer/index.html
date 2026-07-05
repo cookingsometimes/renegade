@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:;">
+        <title>Renegade</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                corePlugins: {
+                    preflight: false,
+                },
+                theme: {
+                    extend: {
+                        colors: {
+                            oxy: {
+                                bg: '#0d1117',
+                                surface: '#161b22',
+                                sidebar: '#0d1117',
+                                border: '#21262d',
+                                accent: '#1f6feb',
+                                hover: '#1c2128',
+                                text: '#c9d1d9',
+                                muted: '#8b949e',
+                            }
+                        }
+                    }
+                }
+            }
+        </script>
+        <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js"></script>
+    </head>
+    <body style="margin: 0; padding: 0">
+        <div id="react-app"></div>
+        <script type="module" src="/index.tsx"></script>
+    </body>
+</html>
