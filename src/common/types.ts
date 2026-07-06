@@ -64,4 +64,5 @@ export type AppState = {
     activeTabId: string;
     autoInject: boolean;
     selectedPids: number[];
+    alwaysOnTop: boolean;
 };

@@ -175,6 +175,13 @@
     align-items: center;
 }
 
+.download-card-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
 .download-btn {
     display: flex;
     align-items: center;

@@ -18,15 +18,18 @@ export const SUMI_XENO_API = "https://sumi-api.netlify.app/api/v0/rblx/executors
 let safeSend: (channel: string, ...args: unknown[]) => void = () => {};
 let serverRequest: (path: string, method?: string, body?: string) => Promise<Record<string, unknown>> = async () => ({});
 let restartServer: () => Promise<{ success: boolean; error?: string }> = async () => ({ success: false, error: "not initialized" });
+let stopServerFn: () => void = () => {};
 
 export function initDownloader(
     sendFn: (channel: string, ...args: unknown[]) => void,
     reqFn: (path: string, method?: string, body?: string) => Promise<Record<string, unknown>>,
     restartFn: () => Promise<{ success: boolean; error?: string }>,
+    stopFn: () => void,
 ) {
     safeSend = sendFn;
     serverRequest = reqFn;
     restartServer = restartFn;
+    stopServerFn = stopFn;
 }
 
 export function getServerVersionFile(): string {
@@ -181,12 +184,14 @@ export async function downloadXeno(): Promise<{ success: boolean; version?: stri
             console.log(`[Renegade] Extracting Xeno to ${versionDir}`);
             extractZip(zipPath, versionDir);
 
+            stopServerFn();
+
             const dllDir = findXenoDllDir(versionDir);
             if (!dllDir) throw new Error("Xeno.dll not found after extraction");
             console.log(`[Renegade] Copying Xeno files from ${dllDir} to ${XENO_DIR}`);
             copyDirSync(dllDir, XENO_DIR);
 
-            console.log(`[Renegade] Restarting server to load Xeno.dll`);
+            console.log(`[Renegade] Starting server to load Xeno.dll`);
             const restartRes = await restartServer();
             console.log(`[Renegade] Server restart: ${JSON.stringify(restartRes)}`);
 

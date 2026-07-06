@@ -6,9 +6,11 @@ interface Props {
     onUiModeChange: (mode: UiMode) => void;
     autoInject: boolean;
     onAutoInjectToggle: () => void;
+    alwaysOnTop: boolean;
+    onAlwaysOnTopToggle: () => void;
 }
 
-export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggle }: Props) => {
+export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggle, alwaysOnTop, onAlwaysOnTopToggle }: Props) => {
     return (
         <div className="settings">
             <div className="page-header">
@@ -44,6 +46,22 @@ export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggl
                             Compact
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <div className="settings-section">
+                <div className="settings-section-label">Window</div>
+                <div className="settings-row">
+                    <div className="settings-row-info">
+                        <span className="settings-row-title">Always on Top</span>
+                        <span className="settings-row-desc">Keep the Renegade window above other windows</span>
+                    </div>
+                    <button
+                        className={`settings-toggle ${alwaysOnTop ? "active" : ""}`}
+                        onClick={onAlwaysOnTopToggle}
+                    >
+                        <span className="settings-toggle-thumb" />
+                    </button>
                 </div>
             </div>
 

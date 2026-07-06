@@ -116,3 +116,33 @@ button {
 button:active {
     transform: scale(0.97);
 }
+
+.install-success-toast {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    background: var(--success-subtle);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    color: var(--success);
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 100;
+    animation: toastIn 300ms ease, toastOut 300ms ease 4.7s forwards;
+    pointer-events: none;
+}
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toastOut {
+    from { opacity: 1; transform: translateX(-50%) translateY(0); }
+    to { opacity: 0; transform: translateX(-50%) translateY(10px); }
+}

@@ -26,6 +26,7 @@ const DEFAULT_STATE: AppState = {
     activeTabId: "tab-0",
     autoInject: false,
     selectedPids: [],
+    alwaysOnTop: false,
 };
 
 const log = (msg: string) => console.log(`[Renegade:UI] ${msg}`);
@@ -40,6 +41,7 @@ export const App = () => {
     const [xenoVersion, setXenoVersion] = useState("");
     const [clients, setClients] = useState<RobloxClient[]>([]);
     const [robloxProcesses, setRobloxProcesses] = useState<RobloxProcess[]>([]);
+    const [installSuccess, setInstallSuccess] = useState(false);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,6 +64,7 @@ export const App = () => {
                     activeTabId: (saved.activeTabId as string) || prev.activeTabId,
                     autoInject: typeof saved.autoInject === "boolean" ? saved.autoInject : prev.autoInject,
                     selectedPids: Array.isArray(saved.selectedPids) ? saved.selectedPids as number[] : prev.selectedPids,
+                    alwaysOnTop: typeof saved.alwaysOnTop === "boolean" ? saved.alwaysOnTop : prev.alwaysOnTop,
                 }));
             }
         } catch { /* ignore */ }
@@ -86,8 +89,7 @@ export const App = () => {
                 window.ContextBridge.isXenoInstalled(),
                 window.ContextBridge.getXenoVersion(),
             ]);
-            log(`Status: installed=${status.installed}, running=${status.running}, version=${status.serverVersion}`);
-
+            log(`Status: installed=${status.installed}, running=${status.running}, serverVersion="${status.serverVersion}", healthVersion="${status.version}", initialized=${status.initialized}, clientCount=${status.clientCount}, mode=${status.mode}`);
             setServerInstalled(status.installed);
             setXenoInstalled(xenoExists);
             setXenoVersion(xenoVer);
@@ -95,15 +97,12 @@ export const App = () => {
             if (status.installed && status.running) {
                 setServerRunning(true);
                 setServerVersion(status.serverVersion);
-                setLoading(false);
                 if (!status.initialized) {
                     log("DLL not initialized, calling init...");
                     await window.ContextBridge.initDll();
                 }
                 detectRobloxProcesses();
                 loadClients();
-                startPolling();
-                return;
             }
 
             if (status.installed && !status.running) {
@@ -114,16 +113,15 @@ export const App = () => {
                     setServerRunning(true);
                     const ver = await window.ContextBridge.getVersion();
                     setServerVersion(ver);
-                    setLoading(false);
                     detectRobloxProcesses();
                     loadClients();
-                    startPolling();
-                    return;
+                } else {
+                    log(`Start failed: ${startResult.error}`);
                 }
-                log(`Start failed: ${startResult.error}`);
             }
 
             setLoading(false);
+            startPolling();
         } catch (e) {
             log(`Error: ${(e as Error).message}`);
             setLoading(false);
@@ -173,16 +171,11 @@ export const App = () => {
     }, [pollHealth]);
 
     useEffect(() => {
-        if (serverRunning) {
-            startPolling();
-        } else if (pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-        }
+        startPolling();
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);
         };
-    }, [serverRunning, startPolling]);
+    }, [startPolling]);
 
     useEffect(() => {
         window.ContextBridge.onServerDied(() => {
@@ -296,6 +289,20 @@ export const App = () => {
         });
     }, [saveState]);
 
+    const handleInstallComplete = useCallback(() => {
+        setInstallSuccess(true);
+        setTimeout(() => setInstallSuccess(false), 5000);
+    }, []);
+
+    const handleAlwaysOnTopToggle = useCallback(() => {
+        setAppState((prev) => {
+            const next = !prev.alwaysOnTop;
+            saveState({ alwaysOnTop: next });
+            window.ContextBridge.setAlwaysOnTop(next);
+            return { ...prev, alwaysOnTop: next };
+        });
+    }, [saveState]);
+
     if (loading) {
         return (
             <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
@@ -306,8 +313,18 @@ export const App = () => {
             </div>
         );
     }
+    const renderSuccessToast = () => {
+        if (!installSuccess) return null;
+        return (
+            <div className="install-success-toast">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                Installation successful
+            </div>
+        );
+    };
 
     const renderPage = () => {
+
         switch (appState.activePage) {
             case "dashboard":
                 return <Dashboard serverRunning={serverRunning} serverVersion={serverVersion} clientCount={clients.length} onNavigate={handlePageChange} onAttach={handleAttach} />;
@@ -320,6 +337,7 @@ export const App = () => {
                         xenoInstalled={xenoInstalled}
                         xenoVersion={xenoVersion}
                         onReady={handleDownloadsReady}
+                        onInstallComplete={handleInstallComplete}
                     />
                 );
             case "execute":
@@ -343,7 +361,7 @@ export const App = () => {
             case "logs":
                 return <Logs />;
             case "settings":
-                return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} />;
+                return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} alwaysOnTop={appState.alwaysOnTop} onAlwaysOnTopToggle={handleAlwaysOnTopToggle} />;
             case "about":
                 return <About serverVersion={serverVersion} />;
         }
@@ -361,6 +379,7 @@ export const App = () => {
             {appState.uiMode === "compact" ? (
                 <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
                     {renderPage()}
+                    {renderSuccessToast()}
                 </div>
             ) : (
                 <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
@@ -375,6 +394,7 @@ export const App = () => {
                     />
                     <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
                         {renderPage()}
+                        {renderSuccessToast()}
                     </div>
                 </div>
             )}

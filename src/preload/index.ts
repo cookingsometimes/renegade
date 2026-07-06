@@ -51,5 +51,9 @@ contextBridge.exposeInMainWorld(
         installAppUpdate: (zipPath) => ipcRenderer.invoke("app:installAppUpdate", zipPath),
         restartApp: () => ipcRenderer.send("app:restartApp"),
         onAppUpdateProgress: (cb) => ipcRenderer.on("app:appUpdateProgress", (_e, p) => cb(p)),
+        setAlwaysOnTop: (onTop) => ipcRenderer.send("window:setAlwaysOnTop", onTop),
+        isAlwaysOnTop: () => ipcRenderer.invoke("app:isAlwaysOnTop"),
+        setInstallComplete: () => ipcRenderer.invoke("app:setInstallComplete"),
+        checkInstallComplete: () => ipcRenderer.invoke("app:checkInstallComplete"),
     },
 );

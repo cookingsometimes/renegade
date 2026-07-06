@@ -100,4 +100,8 @@ export type ContextBridge = {
     onAppUpdateProgress: (cb: (p: { bytesReceived: number; totalBytes: number }) => void) => void;
     setWindowSize: (width: number, height: number) => void;
     centerWindow: () => void;
+    setAlwaysOnTop: (onTop: boolean) => void;
+    isAlwaysOnTop: () => Promise<boolean>;
+    setInstallComplete: () => Promise<void>;
+    checkInstallComplete: () => Promise<boolean>;
 };

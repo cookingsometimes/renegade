@@ -77,17 +77,20 @@ async function checkServerHealth(): Promise<{ status: string; version: string; c
     try {
         const c = new AbortController();
         const res = await fetch(`http://127.0.0.1:${SERVER_PORT}/health`, { signal: c.signal });
-        if (!res.ok) throw new Error("not ok");
+        if (!res.ok) throw new Error(`health HTTP ${res.status}`);
         const data = await res.json() as Record<string, unknown>;
         const raw = typeof data.version === "string" ? data.version : "";
-        return {
+        const result = {
             status: "ok",
             version: raw.replace(/^v/, ""),
             clients: parseClients(data.clients),
             mode: typeof data.mode === "string" ? data.mode : "dll",
             initialized: data.initialized === true,
         };
-    } catch {
+        console.log(`[Renegade] health check OK: version=${result.version}, mode=${result.mode}, initialized=${result.initialized}, clients=${result.clients.length}`);
+        return result;
+    } catch (e) {
+        console.log(`[Renegade] health check FAILED: ${e instanceof Error ? e.message : e}`);
         return { status: "offline", version: "", clients: [], mode: "", initialized: false };
     }
 }
@@ -139,8 +142,15 @@ async function startServer(): Promise<{ success: boolean; error?: string }> {
     });
     serverProcess.on("exit", (code) => {
         console.log(`[Server] Exited (code=${code})`);
-        serverProcess = null;
-        safeSend("app:serverDied");
+        setTimeout(async () => {
+            const health = await checkServerHealth();
+            if (health.status === "ok") {
+                console.log("[Renegade] Server process exited but server is still healthy");
+            } else {
+                serverProcess = null;
+                safeSend("app:serverDied");
+            }
+        }, 1500);
     });
 
     for (let i = 0; i < 30; i++) {
@@ -160,6 +170,9 @@ function stopServer(): void {
         try { serverProcess.kill(); } catch { /* ignore */ }
         serverProcess = null;
     }
+    try {
+        execSync("taskkill /F /IM RenegadeServer.exe 2>nul", { timeout: 3000, windowsHide: true });
+    } catch { /* ignore */ }
 }
 
 const createWindow = (): BrowserWindow => {
@@ -222,7 +235,7 @@ const safeSend = (channel: string, ...args: unknown[]) => {
 };
 
 const registerIpcHandlers = () => {
-    initDownloader(safeSend, serverRequest, restartServer);
+    initDownloader(safeSend, serverRequest, restartServer, stopServer);
     initUpdater(safeSend);
 
     ipcMain.on("window:minimize", () => mainWindow?.minimize());
@@ -243,15 +256,27 @@ const registerIpcHandlers = () => {
         }
     });
     ipcMain.on("window:center", () => mainWindow?.center());
+    ipcMain.on("window:setAlwaysOnTop", (_e, onTop: boolean) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            if (onTop) {
+                mainWindow.setAlwaysOnTop(true, "screen-saver");
+            } else {
+                mainWindow.setAlwaysOnTop(false);
+            }
+        }
+    });
+    ipcMain.handle("app:isAlwaysOnTop", () => mainWindow?.isAlwaysOnTop() ?? false);
 
     ipcMain.handle("app:getServerStatus", async () => {
         const installed = isServerInstalled();
         const version = getServerVersionFile();
         const health = await checkServerHealth();
+        const running = health.status === "ok";
+        console.log(`[Renegade] getServerStatus: installed=${installed}, running=${running}, version="${version}", serverVersion="${health.version}", healthStatus="${health.status}"`);
         return {
             installed,
             version,
-            running: health.status === "ok",
+            running,
             serverVersion: version,
             clientCount: health.clients.length,
             mode: health.mode,
@@ -412,6 +437,20 @@ const registerIpcHandlers = () => {
     ipcMain.handle("app:restartApp", () => {
         app.relaunch();
         app.exit(0);
+    });
+
+    ipcMain.handle("app:setInstallComplete", () => {
+        const flagPath = join(app.getPath("userData"), ".install-complete");
+        writeFileSync(flagPath, "1", "utf-8");
+    });
+
+    ipcMain.handle("app:checkInstallComplete", () => {
+        const flagPath = join(app.getPath("userData"), ".install-complete");
+        if (existsSync(flagPath)) {
+            try { unlinkSync(flagPath); } catch { /* ignore */ }
+            return true;
+        }
+        return false;
     });
 };
 
