@@ -102,8 +102,7 @@ export type ContextBridge = {
     isPortable: () => Promise<boolean>;
     checkForAppUpdate: () => Promise<{ available: boolean; latestVersion: string; currentVersion: string; downloadUrl: string; filename: string; isPortable: boolean }>;
     downloadAppUpdate: (downloadUrl: string, filename: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
-    installPortableUpdate: (filePath: string) => Promise<{ success: boolean; error?: string }>;
-    launchSetupAndQuit: (setupPath: string, version: string) => void;
+    finalizeAndQuit: (filePath: string, version: string) => void;
     onAppUpdateProgress: (cb: (p: { bytesReceived: number; totalBytes: number }) => void) => void;
     setWindowSize: (width: number, height: number) => void;
     centerWindow: () => void;

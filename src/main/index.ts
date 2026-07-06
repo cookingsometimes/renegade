@@ -23,8 +23,7 @@ import {
     isPortable,
     checkForAppUpdate,
     downloadAppUpdate,
-    installPortableUpdate,
-    launchSetupAndQuit,
+    finalizeAndQuit,
 } from "./updater";
 import * as logger from "./logger";
 
@@ -538,11 +537,8 @@ const registerIpcHandlers = () => {
     ipcMain.handle("app:downloadAppUpdate", async (_e, downloadUrl: string, filename: string) => {
         return downloadAppUpdate(downloadUrl, filename);
     });
-    ipcMain.handle("app:installPortableUpdate", async (_e, filePath: string) => {
-        return installPortableUpdate(filePath);
-    });
-    ipcMain.on("app:launchSetupAndQuit", (_e, setupPath: string, version: string) => {
-        launchSetupAndQuit(setupPath, version);
+    ipcMain.on("app:finalizeAndQuit", (_e, filePath: string, version: string) => {
+        finalizeAndQuit(filePath, version);
     });
 
     ipcMain.handle("app:setInstallComplete", () => {

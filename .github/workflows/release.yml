@@ -61,3 +61,12 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove GitHub auto-generated source code archives
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.version.outputs.VERSION }}"
+          gh release delete-asset "$TAG" "${TAG}.zip" &>/dev/null || true
+          gh release delete-asset "$TAG" "${TAG}.tar.gz" &>/dev/null || true

@@ -1,10 +1,9 @@
 import { app, shell } from "electron";
-import { join, dirname } from "path";
+import { join, dirname, basename } from "path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, createWriteStream } from "fs";
-import { rm } from "fs/promises";
 import https from "https";
 import http from "http";
-import { extractZip } from "./downloader";
+
 
 const GITHUB_LATEST = "https://github.com/cookingsometimes/renegade/releases/latest/download";
 const LATEST_YML = `${GITHUB_LATEST}/latest.yml`;
@@ -36,11 +35,21 @@ export function setAppVersion(v: string): void {
 export function isPortable(): boolean {
     const exePath = app.getPath("exe");
     const exeDir = dirname(exePath);
+    const dirName = basename(exeDir);
+    if (/^Renegade-[\d.]+-win$/i.test(dirName)) return true;
     if (existsSync(join(exeDir, "Update.exe"))) return false;
     if (exePath.toLowerCase().includes("program files")) return false;
     const parentDir = dirname(exeDir);
     if (existsSync(join(parentDir, "Update.exe"))) return false;
     return true;
+}
+
+function getDownloadsDir(): string {
+    return app.getPath("downloads");
+}
+
+function getSetupDir(version: string): string {
+    return join(getDownloadsDir(), `Renegade-${version}`);
 }
 
 export interface UpdateCheckResult {
@@ -92,11 +101,18 @@ export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
 }
 
 export async function downloadAppUpdate(downloadUrl: string, filename: string): Promise<{ success: boolean; filePath?: string; error?: string }> {
-    const tempDir = join(app.getPath("userData"), "update-temp");
-    mkdirSync(tempDir, { recursive: true });
-    const filePath = join(tempDir, filename);
-
     try {
+        const portable = isPortable();
+        let destDir: string;
+        if (portable) {
+            destDir = getDownloadsDir();
+        } else {
+            const version = filename.match(/(\d+\.\d+\.\d+)/)?.[1] || "latest";
+            destDir = getSetupDir(version);
+            mkdirSync(destDir, { recursive: true });
+        }
+        const filePath = join(destDir, filename);
+
         await downloadFile(downloadUrl, filePath, (bytes, total) => {
             safeSend("app:appUpdateProgress", { bytesReceived: bytes, totalBytes: total });
         });
@@ -106,49 +122,16 @@ export async function downloadAppUpdate(downloadUrl: string, filename: string): 
     }
 }
 
-export async function installPortableUpdate(filePath: string): Promise<{ success: boolean; error?: string }> {
-    try {
-        const extractDir = join(app.getPath("userData"), "update-staging");
-        if (existsSync(extractDir)) {
-            await rm(extractDir, { recursive: true, force: true });
-        }
-        mkdirSync(extractDir, { recursive: true });
-        extractZip(filePath, extractDir);
-
-        const newVersion = extractZipVersion(filePath);
-        if (newVersion) setAppVersion(newVersion);
-
-        return { success: true };
-    } catch (e) {
-        return { success: false, error: (e as Error).message };
-    }
-}
-
-export function launchSetupAndQuit(setupPath: string, version: string): void {
+export function finalizeAndQuit(filePath: string, version: string): void {
     if (version) setAppVersion(version);
     try {
-        shell.showItemInFolder(setupPath);
+        shell.showItemInFolder(filePath);
     } catch {
-        try { shell.openPath(dirname(setupPath)); } catch { /* ignore */ }
+        try { shell.openPath(dirname(filePath)); } catch { /* ignore */ }
     }
     setTimeout(() => {
         app.exit(0);
     }, 1500);
-}
-
-function extractZipVersion(zipPath: string): string | null {
-    try {
-        const match = zipPath.match(/(\d+\.\d+\.\d+)/);
-        return match ? match[1] : null;
-    } catch {
-        return null;
-    }
-}
-
-function extractZipUrl(yaml: string, version: string): string {
-    const re = /url:\s*(Renegade-[\d.]+-win\.zip)/;
-    const m = yaml.match(re);
-    return m ? m[1] : `Renegade-${version}-win.zip`;
 }
 
 function fetchText(url: string, timeoutMs: number): Promise<string> {
@@ -208,6 +191,12 @@ function downloadFile(url: string, dest: string, onProgress?: (bytes: number, to
         req.on("error", reject);
         req.on("timeout", () => { req.destroy(); reject(new Error("Download timeout")); });
     });
+}
+
+function extractZipUrl(yaml: string, version: string): string {
+    const re = /url:\s*(Renegade-[\d.]+-win\.zip)/;
+    const m = yaml.match(re);
+    return m ? m[1] : `Renegade-${version}-win.zip`;
 }
 
 function extractYamlValue(yaml: string, key: string): string {

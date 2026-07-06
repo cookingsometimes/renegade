@@ -28,7 +28,6 @@ interface AppUpdateState {
     totalBytes: number;
     downloaded: boolean;
     zipPath: string;
-    installing: boolean;
     error: string;
 }
 
@@ -64,7 +63,7 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
         checking: true, available: false, latestVersion: "", currentVersion: "",
         downloadUrl: "", filename: "", isPortable: true, downloading: false,
         bytesReceived: 0, totalBytes: 0, downloaded: false, zipPath: "",
-        installing: false, error: "",
+        error: "",
     });
     const initRef = useRef(false);
 
@@ -240,19 +239,8 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
         }
     };
 
-    const handleInstallAppUpdate = async () => {
-        setAppUpdate((prev) => ({ ...prev, installing: true, error: "" }));
-        try {
-            if (appUpdate.isPortable) {
-                const r = await window.ContextBridge.installPortableUpdate(appUpdate.zipPath);
-                if (!r.success) throw new Error(r.error);
-                onInstallComplete();
-            } else {
-                window.ContextBridge.launchSetupAndQuit(appUpdate.zipPath, appUpdate.latestVersion);
-            }
-        } catch (e) {
-            setAppUpdate((prev) => ({ ...prev, installing: false, error: (e as Error).message }));
-        }
+    const handleFinalizeAndQuit = () => {
+        window.ContextBridge.finalizeAndQuit(appUpdate.zipPath, appUpdate.latestVersion);
     };
 
     const allReady = server.status === "ready" && xeno.status === "ready";
@@ -456,14 +444,11 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                                 Downloading...
                             </span>
                         )}
-                        {!appUpdate.checking && appUpdate.available && appUpdate.downloaded && !appUpdate.installing && (
-                            <button className="download-btn primary" onClick={handleInstallAppUpdate}>
+                        {!appUpdate.checking && appUpdate.available && appUpdate.downloaded && (
+                            <button className="download-btn primary" onClick={handleFinalizeAndQuit}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-                                {appUpdate.isPortable ? "Install Update" : "Run Setup"}
+                                {appUpdate.isPortable ? "Install Update" : "Open Folder"}
                             </button>
-                        )}
-                        {!appUpdate.checking && appUpdate.available && appUpdate.installing && (
-                            <span className="download-ready-badge">Installing...</span>
                         )}
                         {!appUpdate.checking && !appUpdate.available && (
                             <div className="download-ready-badge">
