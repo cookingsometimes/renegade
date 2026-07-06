@@ -43,7 +43,7 @@ pnpm package
 ## Ask AI for questions:
 
 - [Renegade Code](https://deepwiki.com/cookingsometimes/renegade)
-- [Renegade Server Code](https://deepwiki.com/cookingsometimes/renegade)
+- [Renegade Server Code](https://deepwiki.com/cookingsometimes/renegade-server)
 
 ## License
 
