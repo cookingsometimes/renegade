@@ -6,6 +6,9 @@ import { execSync } from "child_process";
 import https from "https";
 import http from "http";
 
+import * as logger from "./logger";
+const SRC = "Downloader";
+
 export const DATA_DIR = app.getPath("userData");
 export const SERVER_DIR = join(DATA_DIR, "server");
 export const SERVER_EXE = "RenegadeServer.exe";
@@ -142,9 +145,9 @@ function downloadFile(url: string, dest: string, onProgress?: (p: DownloadProgre
 export function extractZip(zipPath: string, destDir: string): void {
     mkdirSync(destDir, { recursive: true });
     const cmd = `powershell -NoProfile -Command "& { Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force }"`;
-    console.log(`[Renegade] Extracting via PowerShell...`);
+    logger.info(SRC, `Extracting via PowerShell...`);
     execSync(cmd, { timeout: 60000, windowsHide: true });
-    console.log(`[Renegade] PowerShell extraction complete`);
+    logger.info(SRC, `PowerShell extraction complete`);
 }
 
 export async function downloadXeno(): Promise<{ success: boolean; version?: string; error?: string }> {
@@ -153,7 +156,7 @@ export async function downloadXeno(): Promise<{ success: boolean; version?: stri
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            console.log(`[Renegade] Starting Xeno download attempt ${attempt}/${MAX_RETRIES}`);
+            logger.info(SRC, `Starting Xeno download attempt ${attempt}/${MAX_RETRIES}`);
             safeSend("app:xenoRetry", { attempt, max: MAX_RETRIES });
 
             const c = new AbortController();
@@ -163,7 +166,7 @@ export async function downloadXeno(): Promise<{ success: boolean; version?: stri
 
             if (!res.ok) {
                 const body = await res.text().catch(() => "");
-                console.log(`[Renegade] Xeno API failed: HTTP ${res.status}: ${body}`);
+                logger.warn(SRC, `Xeno API failed: HTTP ${res.status}: ${body}`);
                 throw new Error(`HTTP ${res.status}: ${body}`);
             }
 
@@ -178,35 +181,35 @@ export async function downloadXeno(): Promise<{ success: boolean; version?: stri
             const zipPath = join(versionDir, "Xeno.zip");
 
             mkdirSync(versionDir, { recursive: true });
-            console.log(`[Renegade] Downloading Xeno zip to ${zipPath}`);
+            logger.info(SRC, `Downloading Xeno zip to ${zipPath}`);
             await downloadFile(hit.url, zipPath, (p) => safeSend("app:xenoProgress", p));
 
-            console.log(`[Renegade] Extracting Xeno to ${versionDir}`);
+            logger.info(SRC, `Extracting Xeno to ${versionDir}`);
             extractZip(zipPath, versionDir);
 
             stopServerFn();
 
             const dllDir = findXenoDllDir(versionDir);
             if (!dllDir) throw new Error("Xeno.dll not found after extraction");
-            console.log(`[Renegade] Copying Xeno files from ${dllDir} to ${XENO_DIR}`);
+            logger.info(SRC, `Copying Xeno files from ${dllDir} to ${XENO_DIR}`);
             copyDirSync(dllDir, XENO_DIR);
 
-            console.log(`[Renegade] Starting server to load Xeno.dll`);
+            logger.info(SRC, `Starting server to load Xeno.dll`);
             const restartRes = await restartServer();
-            console.log(`[Renegade] Server restart: ${JSON.stringify(restartRes)}`);
+            logger.info(SRC, `Server restart: ${JSON.stringify(restartRes)}`);
 
-            console.log(`[Renegade] Xeno download successful: version ${version}`);
+            logger.info(SRC, `Xeno download successful: version ${version}`);
             return { success: true, version };
         } catch (e) {
             lastError = e as Error;
-            console.log(`[Renegade] Xeno attempt ${attempt} failed: ${lastError.message}`);
+            logger.error(SRC, `Xeno attempt ${attempt} failed: ${lastError.message}`, lastError);
             if (attempt < MAX_RETRIES) {
                 safeSend("app:xenoRetry", { attempt, max: MAX_RETRIES, retrying: true, error: lastError.message });
                 await new Promise((r) => setTimeout(r, 3000 * attempt));
             }
         }
     }
-    console.log(`[Renegade] Xeno download failed after ${MAX_RETRIES} attempts: ${lastError?.message ?? "Unknown"}`);
+    logger.error(SRC, `Xeno download failed after ${MAX_RETRIES} attempts: ${lastError?.message ?? "Unknown"}`);
     return { success: false, error: lastError?.message ?? "Unknown error" };
 }
 
@@ -216,7 +219,7 @@ export async function downloadServer(): Promise<{ success: boolean; version?: st
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            console.log(`[Renegade] Starting server download attempt ${attempt}/${MAX_RETRIES}`);
+            logger.info(SRC, `Starting server download attempt ${attempt}/${MAX_RETRIES}`);
             safeSend("app:serverRetry", { attempt, max: MAX_RETRIES });
 
             const c = new AbortController();
@@ -232,14 +235,14 @@ export async function downloadServer(): Promise<{ success: boolean; version?: st
 
             mkdirSync(SERVER_DIR, { recursive: true });
             const dest = join(SERVER_DIR, src.filename);
-            console.log(`[Renegade] Downloading server to ${dest}`);
+            logger.info(SRC, `Downloading server to ${dest}`);
             await downloadFile(src.url, dest, (p) => safeSend("app:serverDownloadProgress", p));
             setServerVersion(version);
-            console.log(`[Renegade] Server download successful: version ${version}`);
+            logger.info(SRC, `Server download successful: version ${version}`);
             return { success: true, version };
         } catch (e) {
             lastError = e as Error;
-            console.log(`[Renegade] Server attempt ${attempt} failed: ${lastError.message}`);
+            logger.error(SRC, `Server attempt ${attempt} failed: ${lastError.message}`, lastError);
             if (attempt < MAX_RETRIES) {
                 safeSend("app:serverRetry", { attempt, max: MAX_RETRIES, retrying: true, error: lastError.message });
                 await new Promise((r) => setTimeout(r, 3000 * attempt));

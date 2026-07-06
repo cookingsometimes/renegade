@@ -141,7 +141,9 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                 error: "",
                 retryError: "",
             }));
-        } catch { /* ignore */ }
+        } catch (e) {
+            window.ContextBridge.log("ERROR", "Downloads", `refreshStatus failed: ${(e as Error).message}`);
+        }
     };
 
     const handleDownloadServer = async () => {

@@ -54,5 +54,13 @@ contextBridge.exposeInMainWorld(
         onAppUpdateProgress: (cb) => ipcRenderer.on("app:appUpdateProgress", (_e, p) => cb(p)),
         setAlwaysOnTop: (onTop) => ipcRenderer.send("window:setAlwaysOnTop", onTop),
         isAlwaysOnTop: () => ipcRenderer.invoke("app:isAlwaysOnTop"),
+
+        log: (level, source, message) => ipcRenderer.send("app:log", { level, source, message }),
+        onToast: (cb) => ipcRenderer.on("app:toast", (_e, data) => cb(data)),
+        openLogsFolder: () => ipcRenderer.invoke("app:openLogsFolder"),
+        getLogFiles: () => ipcRenderer.invoke("app:getLogFiles"),
+        readLogFile: (filename) => ipcRenderer.invoke("app:readLogFile", filename),
+        clearLogs: () => ipcRenderer.invoke("app:clearLogs"),
+        getCrashRecovery: () => ipcRenderer.invoke("app:getCrashRecovery"),
     },
 );

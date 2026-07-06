@@ -52,6 +52,12 @@ export type ScriptBloxScriptDetail = {
     success?: boolean;
 };
 
+export type ToastData = {
+    message: string;
+    level: "info" | "warn" | "error" | "success";
+    source?: string;
+};
+
 export type ContextBridge = {
     getServerStatus: () => Promise<ServerStatus>;
     isXenoInstalled: () => Promise<boolean>;
@@ -103,4 +109,8 @@ export type ContextBridge = {
     centerWindow: () => void;
     setAlwaysOnTop: (onTop: boolean) => void;
     isAlwaysOnTop: () => Promise<boolean>;
+
+    log: (level: string, source: string, message: string) => void;
+    onToast: (cb: (data: ToastData) => void) => void;
+    openLogsFolder: () => Promise<void>;
 };

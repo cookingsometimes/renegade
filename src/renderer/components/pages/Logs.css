@@ -13,6 +13,25 @@
     margin-bottom: 16px;
 }
 
+.logs-folder-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.logs-folder-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
 .logs-filter {
     height: 32px;
     padding: 0 12px;
@@ -22,6 +41,7 @@
     color: var(--text-primary);
     font-size: 12px;
     width: 200px;
+    margin-left: auto;
 }
 
 .logs-filter:focus {

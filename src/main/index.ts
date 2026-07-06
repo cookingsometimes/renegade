@@ -26,18 +26,39 @@ import {
     installPortableUpdate,
     launchSetupAndQuit,
 } from "./updater";
+import * as logger from "./logger";
 
 let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
+let serverCrashCount = 0;
+let serverRestartTimer: ReturnType<typeof setTimeout> | null = null;
+const MAX_SERVER_CRASHES = 3;
 const SERVER_PORT = 3420;
 
-process.on("uncaughtException", (err) => {
-    console.error("[Renegade] Uncaught:", err.message);
-    process.exit(1);
-});
-process.on("unhandledRejection", (reason) => {
-    console.error("[Renegade] Unhandled:", reason instanceof Error ? reason.message : String(reason));
-});
+const SRC = "Main";
+
+// Redirect unhandled errors to logger before any IPC exists
+function setupGlobalErrorHandlers(): void {
+    process.on("uncaughtException", (err) => {
+        logger.error(SRC, `Uncaught exception: ${err.message}`, err);
+        process.exit(1);
+    });
+    process.on("unhandledRejection", (reason) => {
+        const msg = reason instanceof Error ? reason.message : String(reason);
+        const err = reason instanceof Error ? reason : undefined;
+        logger.error(SRC, `Unhandled rejection: ${msg}`, err);
+    });
+}
+
+setupGlobalErrorHandlers();
+
+logger.initCrashLog();
+
+const crashRecovery = logger.getCrashRecovery();
+if (crashRecovery && crashRecovery.count > 0 && crashRecovery.count <= 3) {
+    logger.warn(SRC, `App recovered from previous crash (count=${crashRecovery.count})`);
+}
+logger.clearCrashRecovery();
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -65,10 +86,16 @@ function serverRequest(path: string, method = "GET", body?: string): Promise<Rec
             let data = "";
             res.on("data", (chunk) => { data += chunk; });
             res.on("end", () => {
-                try { resolve(JSON.parse(data) as Record<string, unknown>); } catch { resolve({ raw: data }); }
+                try { resolve(JSON.parse(data) as Record<string, unknown>); } catch {
+                    logger.warn(SRC, `Non-JSON response from ${path}`);
+                    resolve({ raw: data });
+                }
             });
         });
-        req.on("error", reject);
+        req.on("error", (e) => {
+            logger.error(SRC, `Server request failed: ${path}`, e);
+            reject(e);
+        });
         req.setTimeout(5000, () => { req.destroy(); reject(new Error("timeout")); });
         if (body) req.write(body);
         req.end();
@@ -89,10 +116,11 @@ async function checkServerHealth(): Promise<{ status: string; version: string; c
             mode: typeof data.mode === "string" ? data.mode : "dll",
             initialized: data.initialized === true,
         };
-        console.log(`[Renegade] health check OK: version=${result.version}, mode=${result.mode}, initialized=${result.initialized}, clients=${result.clients.length}`);
+        logger.info(SRC, `Health OK: version=${result.version}, mode=${result.mode}, initialized=${result.initialized}, clients=${result.clients.length}`);
         return result;
     } catch (e) {
-        console.log(`[Renegade] health check FAILED: ${e instanceof Error ? e.message : e}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.debug(SRC, `Health FAILED: ${msg}`);
         return { status: "offline", version: "", clients: [], mode: "", initialized: false };
     }
 }
@@ -110,16 +138,16 @@ function parseClients(raw: unknown): Array<[number, string, string, number, numb
 
 async function startServer(): Promise<{ success: boolean; error?: string }> {
     const exe = join(SERVER_DIR, SERVER_EXE);
-    console.log(`[Renegade] startServer: exe=${exe}, exists=${existsSync(exe)}`);
+    logger.info(SRC, `startServer: exe=${exe}, exists=${existsSync(exe)}`);
     if (!existsSync(exe)) return { success: false, error: "Server not installed" };
 
     const health = await checkServerHealth();
     if (health.status === "ok") {
-        console.log("[Renegade] Server already running");
+        logger.info(SRC, "Server already running");
         return { success: true };
     }
 
-    console.log("[Renegade] Spawning server...");
+    logger.info(SRC, "Spawning server...");
     mkdirSync(SERVER_DIR, { recursive: true });
 
     serverProcess = spawn(exe, [
@@ -136,21 +164,50 @@ async function startServer(): Promise<{ success: boolean; error?: string }> {
 
     serverProcess.stdout?.on("data", (d: Buffer) => {
         const m = d.toString().trim();
-        if (m) console.log(`[Server] ${m}`);
+        if (m) logger.info("Server", m);
     });
     serverProcess.stderr?.on("data", (d: Buffer) => {
         const m = d.toString().trim();
-        if (m) console.warn(`[Server] ${m}`);
+        if (m) logger.warn("Server", m);
     });
     serverProcess.on("exit", (code) => {
-        console.log(`[Server] Exited (code=${code})`);
+        logger.info(SRC, `Server exitted (code=${code})`);
         setTimeout(async () => {
-            const health = await checkServerHealth();
-            if (health.status === "ok") {
-                console.log("[Renegade] Server process exited but server is still healthy");
+            const h = await checkServerHealth();
+            if (h.status === "ok") {
+                logger.info(SRC, "Server process exitted but server is still healthy");
+                serverCrashCount = 0;
             } else {
                 serverProcess = null;
+                serverCrashCount++;
+                logger.warn(SRC, `Server died unexpectedly (crash #${serverCrashCount}/${MAX_SERVER_CRASHES})`);
                 safeSend("app:serverDied");
+
+                if (serverCrashCount <= MAX_SERVER_CRASHES) {
+                    const delay = Math.min(serverCrashCount * 3000, 10000);
+                    logger.info(SRC, `Auto-restarting server in ${delay}ms (attempt ${serverCrashCount})`);
+                    safeSend("app:toast", { message: `Server crashed. Restarting in ${delay / 1000}s (${serverCrashCount}/${MAX_SERVER_CRASHES})...`, level: "warn" });
+                    if (serverRestartTimer) clearTimeout(serverRestartTimer);
+                    serverRestartTimer = setTimeout(async () => {
+                        const alive = await checkServerHealth();
+                        if (alive.status === "ok") {
+                            serverCrashCount = 0;
+                            return;
+                        }
+                        const r = await startServer();
+                        if (r.success) {
+                            serverCrashCount = 0;
+                            logger.info(SRC, "Server auto-restart successful");
+                            safeSend("app:toast", { message: "Server restarted successfully", level: "success" });
+                        } else {
+                            logger.error(SRC, `Server auto-restart failed: ${r.error}`);
+                            safeSend("app:toast", { message: `Server restart failed: ${r.error}`, level: "error" });
+                        }
+                    }, delay);
+                } else {
+                    logger.error(SRC, `Server crashed ${MAX_SERVER_CRASHES} times, giving up`);
+                    safeSend("app:toast", { message: `Server crashed ${MAX_SERVER_CRASHES} times. Please restart manually.`, level: "error" });
+                }
             }
         }, 1500);
     });
@@ -159,11 +216,11 @@ async function startServer(): Promise<{ success: boolean; error?: string }> {
         await new Promise((r) => setTimeout(r, 1000));
         const h = await checkServerHealth();
         if (h.status === "ok") {
-            console.log("[Renegade] Server ready");
+            logger.info(SRC, "Server ready");
             return { success: true };
         }
     }
-    console.log("[Renegade] Server timeout");
+    logger.error(SRC, "Server did not start in time");
     return { success: false, error: "Server did not start in time" };
 }
 
@@ -174,6 +231,7 @@ function stopServer(): void {
     }
     try {
         execSync("taskkill /F /IM RenegadeServer.exe 2>nul", { timeout: 3000, windowsHide: true });
+        logger.info(SRC, "Server stopped via taskkill");
     } catch { /* ignore */ }
 }
 
@@ -221,7 +279,7 @@ const loadContent = (bw: BrowserWindow) => {
 };
 
 async function restartServer(): Promise<{ success: boolean; error?: string }> {
-    console.log("[Renegade] Restarting server...");
+    logger.info(SRC, "Restarting server...");
     stopServer();
     await new Promise((r) => setTimeout(r, 2000));
     return startServer();
@@ -274,7 +332,7 @@ const registerIpcHandlers = () => {
         const version = getServerVersionFile();
         const health = await checkServerHealth();
         const running = health.status === "ok";
-        console.log(`[Renegade] getServerStatus: installed=${installed}, running=${running}, version="${version}", serverVersion="${health.version}", healthStatus="${health.status}"`);
+        logger.info(SRC, `getServerStatus: installed=${installed}, running=${running}, version="${version}", serverVersion="${health.version}", healthStatus="${health.status}"`);
         return {
             installed,
             version,
@@ -288,31 +346,61 @@ const registerIpcHandlers = () => {
 
     ipcMain.handle("app:isXenoInstalled", async () => checkXenoInstalled());
     ipcMain.handle("app:getXenoVersion", async () => getXenoVersion());
-    ipcMain.handle("app:startServer", async () => startServer());
+    ipcMain.handle("app:startServer", async () => {
+        logger.info(SRC, "IPC: startServer");
+        const result = await startServer();
+        if (!result.success) {
+            safeSend("app:toast", { message: `Server start failed: ${result.error}`, level: "error" });
+        }
+        return result;
+    });
     ipcMain.handle("app:stopServer", () => { stopServer(); return { success: true }; });
     ipcMain.handle("app:health", async () => checkServerHealth());
     ipcMain.handle("app:getRobloxProcesses", () => getRobloxProcesses());
+
     ipcMain.handle("app:getClients", async () => {
         try {
             const data = await serverRequest("/clients");
             return parseClients(data.clients);
-        } catch { return []; }
+        } catch {
+            logger.warn(SRC, "Failed to get clients");
+            return [];
+        }
     });
     ipcMain.handle("app:attach", async () => {
-        try { await serverRequest("/attach", "POST"); return true; } catch { return false; }
+        try {
+            await serverRequest("/attach", "POST");
+            logger.info(SRC, "Attach successful");
+            return true;
+        } catch (e) {
+            logger.error(SRC, "Attach failed", e instanceof Error ? e : undefined);
+            safeSend("app:toast", { message: "Failed to attach to Roblox", level: "error" });
+            return false;
+        }
     });
     ipcMain.handle("app:initDll", async () => {
         try { await serverRequest("/init", "POST"); return true; } catch { return false; }
     });
     ipcMain.handle("app:getConfig", async () => {
-        try { return await serverRequest("/config"); } catch { return {}; }
+        try { return await serverRequest("/config"); } catch {
+            logger.warn(SRC, "Failed to get config");
+            return {};
+        }
     });
     ipcMain.handle("app:execute", async (_e, script: string, pids: number[]) => {
         try {
             const result = await serverRequest("/execute", "POST", JSON.stringify({ script, pids }));
-            return { success: result.success === true, error: result.error };
+            const ok = result.success === true;
+            if (!ok) {
+                logger.warn(SRC, `Execute failed: ${result.error}`);
+                safeSend("app:toast", { message: `Execute error: ${result.error}`, level: "warn" });
+            }
+            return { success: ok, error: result.error };
         } catch (e) {
-            return { success: false, error: (e as Error).message };
+            const msg = (e as Error).message;
+            logger.error(SRC, `Execute error: ${msg}`);
+            safeSend("app:toast", { message: `Execute error: ${msg}`, level: "error" });
+            return { success: false, error: msg };
         }
     });
     ipcMain.handle("app:getLogs", async () => {
@@ -331,7 +419,10 @@ const registerIpcHandlers = () => {
             clearTimeout(t);
             if (!res.ok) return { needsUpdate: false, latestVersion: "" };
             return await res.json();
-        } catch { return { needsUpdate: false, latestVersion: "" }; }
+        } catch {
+            logger.warn(SRC, "Server update check failed");
+            return { needsUpdate: false, latestVersion: "" };
+        }
     });
 
     ipcMain.handle("app:downloadServer", async () => downloadServer());
@@ -344,7 +435,10 @@ const registerIpcHandlers = () => {
     ipcMain.handle("app:loadState", () => {
         const filePath = join(app.getPath("userData"), "app-state.json");
         if (!existsSync(filePath)) return {};
-        try { return JSON.parse(readFileSync(filePath, "utf-8")); } catch { return {}; }
+        try { return JSON.parse(readFileSync(filePath, "utf-8")); } catch {
+            logger.warn(SRC, "Failed to load app state, returning empty");
+            return {};
+        }
     });
 
     ipcMain.handle("app:getXenoDir", () => XENO_DIR);
@@ -401,24 +495,33 @@ const registerIpcHandlers = () => {
         const cached = cacheGet(key);
         if (cached) return cached;
         const url = `https://scriptblox.com/api/script/search?q=${encodeURIComponent(query)}&page=${page}&max=20`;
-        const data = await fetchJson(url);
-        cacheSet(key, data);
+        const data = await fetchJson(url).catch(() => {
+            logger.warn("ScriptBlox", "Search failed, returning empty");
+            return null;
+        });
+        if (data) cacheSet(key, data);
         return data;
     });
     ipcMain.handle("scriptblox:trending", async () => {
         const key = "trending";
         const cached = cacheGet(key);
         if (cached) return cached;
-        const data = await fetchJson("https://scriptblox.com/api/script/trending");
-        cacheSet(key, data);
+        const data = await fetchJson("https://scriptblox.com/api/script/trending").catch(() => {
+            logger.warn("ScriptBlox", "Trending fetch failed");
+            return null;
+        });
+        if (data) cacheSet(key, data);
         return data;
     });
     ipcMain.handle("scriptblox:source", async (_e, slug: string) => {
         const key = `source:${slug}`;
         const cached = cacheGet(key);
         if (cached) return cached;
-        const data = await fetchJson(`https://scriptblox.com/api/script/${encodeURIComponent(slug)}`);
-        cacheSet(key, data);
+        const data = await fetchJson(`https://scriptblox.com/api/script/${encodeURIComponent(slug)}`).catch(() => {
+            logger.warn("ScriptBlox", `Source fetch failed for ${slug}`);
+            return null;
+        });
+        if (data) cacheSet(key, data);
         return data;
     });
 
@@ -427,7 +530,8 @@ const registerIpcHandlers = () => {
     ipcMain.handle("app:checkForAppUpdate", async () => {
         try {
             return await checkForAppUpdate();
-        } catch {
+        } catch (e) {
+            logger.error(SRC, "App update check failed", e instanceof Error ? e : undefined);
             return { available: false, latestVersion: "", currentVersion: "", downloadUrl: "", filename: "", isPortable: false };
         }
     });
@@ -454,6 +558,21 @@ const registerIpcHandlers = () => {
         }
         return false;
     });
+
+    // --- Logging IPC ---
+
+    ipcMain.on("app:log", (_e, entry: { level: string; source: string; message: string }) => {
+        const lvl = entry.level || "INFO";
+        if (lvl === "ERROR") logger.error(entry.source || "Renderer", entry.message);
+        else if (lvl === "WARN") logger.warn(entry.source || "Renderer", entry.message);
+        else if (lvl === "DEBUG") logger.debug(entry.source || "Renderer", entry.message);
+        else logger.info(entry.source || "Renderer", entry.message);
+    });
+
+    ipcMain.handle("app:openLogsFolder", async () => {
+        const { shell } = await import("electron");
+        shell.openPath(logger.getLogDir());
+    });
 };
 
 function getRobloxProcesses(): Array<{ pid: number; name: string }> {
@@ -464,7 +583,10 @@ function getRobloxProcesses(): Array<{ pid: number; name: string }> {
             const parts = line.split(",").map((p) => p.replace(/"/g, "").trim());
             return { pid: parseInt(parts[1], 10), name: parts[0] };
         }).filter((p) => !isNaN(p.pid));
-    } catch { return []; }
+    } catch {
+        logger.warn(SRC, "Failed to get Roblox processes");
+        return [];
+    }
 }
 
 nativeTheme.addListener("updated", () => {
@@ -496,7 +618,7 @@ nativeTheme.addListener("updated", () => {
         });
     });
 
-    startServer().catch((e) => console.log(`[Renegade] Background start: ${e}`));
+    startServer().catch((e) => logger.error(SRC, `Background start failed: ${e.message}`, e));
 
     app.on("before-quit", () => stopServer());
     app.on("window-all-closed", () => {

@@ -10,6 +10,7 @@ import { Settings } from "./components/pages/Settings";
 import { About } from "./components/pages/About";
 import { Downloads } from "./components/pages/Downloads";
 import type { AppState, PageId, RobloxClient, ScriptTab, UiMode } from "@common/types";
+import type { ToastData } from "@common/ContextBridge";
 import "./styles/global.css";
 
 const DEFAULT_TABS: ScriptTab[] = [
@@ -42,8 +43,18 @@ export const App = () => {
     const [clients, setClients] = useState<RobloxClient[]>([]);
     const [robloxProcesses, setRobloxProcesses] = useState<RobloxProcess[]>([]);
     const [installSuccess, setInstallSuccess] = useState(false);
+    const [toast, setToast] = useState<{ data: ToastData; id: number } | null>(null);
+    const toastIdRef = useRef(0);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const showToast = useCallback((data: ToastData) => {
+        const id = ++toastIdRef.current;
+        setToast({ data, id });
+        setTimeout(() => {
+            setToast((prev) => prev?.id === id ? null : prev);
+        }, 5000);
+    }, []);
 
     useEffect(() => {
         log("App mounted, loading state...");
@@ -182,6 +193,13 @@ export const App = () => {
             log("Server died notification");
             setServerRunning(false);
             setClients([]);
+            showToast({ message: "Server connection lost", level: "error" });
+        });
+    }, []);
+
+    useEffect(() => {
+        window.ContextBridge.onToast((data: ToastData) => {
+            showToast(data);
         });
     }, []);
 
@@ -313,14 +331,35 @@ export const App = () => {
             </div>
         );
     }
-    const renderSuccessToast = () => {
-        if (!installSuccess) return null;
-        return (
-            <div className="install-success-toast">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                Installation successful
-            </div>
-        );
+    const renderToasts = () => {
+        const items: React.ReactNode[] = [];
+
+        if (installSuccess) {
+            items.push(
+                <div key="install" className="toast toast-success">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                    Installation successful
+                </div>
+            );
+        }
+
+        if (toast) {
+            const iconMap = {
+                error: <svg key="e" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>,
+                warn: <svg key="w" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>,
+                info: <svg key="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>,
+                success: <svg key="s" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>,
+            };
+            items.push(
+                <div key={`toast-${toast.id}`} className={`toast toast-${toast.data.level}`}>
+                    {iconMap[toast.data.level] || iconMap.info}
+                    {toast.data.message}
+                </div>
+            );
+        }
+
+        if (items.length === 0) return null;
+        return <div className="toast-container">{items}</div>;
     };
 
     const renderPage = () => {
@@ -379,7 +418,7 @@ export const App = () => {
             {appState.uiMode === "compact" ? (
                 <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
                     {renderPage()}
-                    {renderSuccessToast()}
+                    {renderToasts()}
                 </div>
             ) : (
                 <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
@@ -394,7 +433,7 @@ export const App = () => {
                     />
                     <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
                         {renderPage()}
-                        {renderSuccessToast()}
+                        {renderToasts()}
                     </div>
                 </div>
             )}
