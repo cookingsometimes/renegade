@@ -1,8 +1,8 @@
 # Renegade
 
-A custom Electron UI that wraps the [Xeno](https://xeno.now) Roblox executor and replaces the default Xeno Legacy UI with something actually usable — a multi-tab Monaco editor, real-time client monitoring, and integrated script management, all talking to a local C# backend that loads `Xeno.dll`.
+A custom Electron UI that wraps the [Xeno](https://xeno.now) Roblox executor. It's an alternative front-end to Xeno's own Legacy UI — same engine, same DLL, same injection, a different take on the interface.
 
-If you don't like Xeno's stock interface, Renegade is a drop-in front-end for the same engine. Same DLL, same injection, different (and faster) UI.
+Xeno's Legacy UI is solid: it already ships a tabbed Monaco editor, inject/execute, and a Script Hub. Renegade keeps that baseline and adds the things the Legacy UI doesn't have — an in-app downloader for `RenegadeServer.exe` and `Xeno.dll`, two switchable UI modes (Compact and Full), and live server/Xeno logs surfaced directly in the app. If you like Xeno's stock interface, keep using it. If you want those extras, Renegade is the same engine with a different shell.
 
 ---
 
@@ -10,18 +10,23 @@ If you don't like Xeno's stock interface, Renegade is a drop-in front-end for th
 
 [Xeno](https://xeno.now) is a keyless Roblox script executor distributed as a closed-source Windows DLL. It handles native Win32 injection into the Roblox client, supports multi-client attach, and exposes a small native API (`Initialize`, `GetClients`, `Attach`, `Execute`, `SetSetting`) that other tools can call into.
 
-Renegade does **not** reimplement Xeno. It downloads the official `Xeno.dll` and drives it through a local server. If you want the raw Xeno experience, you can still use Xeno's own UI — Renegade just gives you a better one on top of the same engine.
+Renegade does **not** reimplement Xeno. It downloads the official `Xeno.dll` and drives it through a local server, exposing the same capabilities the Legacy UI already offers (plus a few extras). The goal isn't to one-up Xeno — it's to give users a choice of front-end for the same engine.
 
 ---
 
 ## What Renegade does
 
+Carried over from the Xeno Legacy UI:
+
 - **Monaco editor with tabs** — write and organize Lua scripts, save and load them locally
 - **Inject and execute** — attach Xeno to Roblox and run scripts on the clients you pick
 - **Script Hub** — browse [ScriptBlox](https://scriptblox.com) or manage your own local scripts
-- **Built-in downloader** — installs and updates `RenegadeServer.exe` and `Xeno.dll` from inside the app via the Sumi API
 - **Client monitoring** — shows injected clients and detected Roblox processes in real time
-- **Two UI modes** — Compact (750×560, centered nav) or Full (1200×800, sidebar)
+
+What Renegade adds on top:
+
+- **Built-in downloader** — installs and updates `RenegadeServer.exe` and `Xeno.dll` from inside the app via the Sumi API, no manual DLL hunting
+- **Two UI modes** — Compact (750×560, centered nav) or Full (1200×800, sidebar), switch on the fly
 - **Live logs and settings** — server logs and Xeno settings are exposed in-app, not hidden behind a console
 
 ---
@@ -59,18 +64,30 @@ Default bind is `127.0.0.1:8443` (loopback only — the server is not meant to b
 
 ## Getting started
 
+### Using Renegade (end users)
+
+Grab the latest pre-built release from GitHub and run it — no build tools required:
+
+→ **[Download the latest release](https://github.com/cookingsometimes/renegade/releases/latest)**
+
+On first launch, open the **Downloads** page inside the app and it will pull `RenegadeServer.exe` and `Xeno.dll` for you automatically via the Sumi API.
+
+Requirements:
+
+- Windows 10/11 (x64)
+- [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+- [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
+- Roblox installed (Microsoft Store or web version both work)
+
+### Building from source (developers)
+
 ```bash
 pnpm install
-pnpm dev
+pnpm dev      # run in development
+pnpm package  # produce a distributable
 ```
 
-On first launch, the Downloads page will pull `RenegadeServer.exe` and `Xeno.dll` for you. You need a Windows host with the Microsoft Visual C++ Redistributable and the .NET 8 runtime installed (Xeno itself requires both).
-
-### Build
-
-```bash
-pnpm package
-```
+You'll need Node.js, pnpm, and the Windows build toolchain that `electron-builder` expects.
 
 ---
 
