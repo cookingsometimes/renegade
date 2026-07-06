@@ -1,13 +1,13 @@
-import { app } from "electron";
-import { join } from "path";
+import { app, shell } from "electron";
+import { join, dirname } from "path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, createWriteStream } from "fs";
 import { rm } from "fs/promises";
 import https from "https";
 import http from "http";
 import { extractZip } from "./downloader";
 
-const GITHUB_RELEASES = "https://github.com/cookingsometimes/renegade/releases/latest/download";
-const LATEST_YML = `${GITHUB_RELEASES}/latest.yml`;
+const GITHUB_LATEST = "https://github.com/cookingsometimes/renegade/releases/latest/download";
+const LATEST_YML = `${GITHUB_LATEST}/latest.yml`;
 const APP_VERSION_FILE = "app-version.txt";
 
 let safeSend: (channel: string, ...args: unknown[]) => void = () => {};
@@ -33,29 +33,40 @@ export function setAppVersion(v: string): void {
     writeFileSync(join(app.getPath("userData"), APP_VERSION_FILE), v.replace(/^v/, ""), "utf-8");
 }
 
+export function isPortable(): boolean {
+    const exePath = app.getPath("exe");
+    const exeDir = dirname(exePath);
+    if (existsSync(join(exeDir, "Update.exe"))) return false;
+    if (exePath.toLowerCase().includes("program files")) return false;
+    const parentDir = dirname(exeDir);
+    if (existsSync(join(parentDir, "Update.exe"))) return false;
+    return true;
+}
+
 export interface UpdateCheckResult {
     available: boolean;
     latestVersion: string;
     currentVersion: string;
     downloadUrl: string;
     filename: string;
+    isPortable: boolean;
 }
 
 export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
     const current = getAppVersion();
+    const portable = isPortable();
     const result: UpdateCheckResult = {
         available: false,
         latestVersion: current,
         currentVersion: current,
         downloadUrl: "",
         filename: "",
+        isPortable: portable,
     };
 
     try {
         const text = await fetchText(LATEST_YML, 10000);
         const version = extractYamlValue(text, "version");
-        const pathVal = extractYamlValue(text, "path");
-
         if (!version) return result;
 
         const cleanVersion = version.replace(/^v/, "");
@@ -63,8 +74,15 @@ export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
 
         if (compareVersions(cleanVersion, current) > 0) {
             result.available = true;
-            result.downloadUrl = `${GITHUB_RELEASES}/${pathVal || `Renegade-${cleanVersion}-win.zip`}`;
-            result.filename = pathVal || `Renegade-${cleanVersion}-win.zip`;
+            if (portable) {
+                const zipFile = extractZipUrl(text, cleanVersion);
+                result.downloadUrl = `${GITHUB_LATEST}/${zipFile}`;
+                result.filename = zipFile;
+            } else {
+                const setupFile = extractYamlValue(text, "path") || `Renegade-Setup-${cleanVersion}.exe`;
+                result.downloadUrl = `${GITHUB_LATEST}/${setupFile}`;
+                result.filename = setupFile;
+            }
         }
 
         return result;
@@ -73,37 +91,46 @@ export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
     }
 }
 
-export async function downloadAppUpdate(downloadUrl: string, filename: string): Promise<{ success: boolean; zipPath?: string; error?: string }> {
+export async function downloadAppUpdate(downloadUrl: string, filename: string): Promise<{ success: boolean; filePath?: string; error?: string }> {
     const tempDir = join(app.getPath("userData"), "update-temp");
     mkdirSync(tempDir, { recursive: true });
-    const zipPath = join(tempDir, filename);
+    const filePath = join(tempDir, filename);
 
     try {
-        await downloadFile(downloadUrl, zipPath, (bytes, total) => {
+        await downloadFile(downloadUrl, filePath, (bytes, total) => {
             safeSend("app:appUpdateProgress", { bytesReceived: bytes, totalBytes: total });
         });
-        return { success: true, zipPath };
+        return { success: true, filePath };
     } catch (e) {
         return { success: false, error: (e as Error).message };
     }
 }
 
-export async function installAppUpdate(zipPath: string): Promise<{ success: boolean; error?: string }> {
+export async function installPortableUpdate(filePath: string): Promise<{ success: boolean; error?: string }> {
     try {
         const extractDir = join(app.getPath("userData"), "update-staging");
         if (existsSync(extractDir)) {
             await rm(extractDir, { recursive: true, force: true });
         }
         mkdirSync(extractDir, { recursive: true });
-        extractZip(zipPath, extractDir);
+        extractZip(filePath, extractDir);
 
-        const newVersion = extractZipVersion(zipPath);
+        const newVersion = extractZipVersion(filePath);
         if (newVersion) setAppVersion(newVersion);
 
         return { success: true };
     } catch (e) {
         return { success: false, error: (e as Error).message };
     }
+}
+
+export function launchSetupAndQuit(setupPath: string): void {
+    try {
+        shell.openPath(setupPath);
+    } catch { /* ignore */ }
+    setTimeout(() => {
+        app.exit(0);
+    }, 1000);
 }
 
 function extractZipVersion(zipPath: string): string | null {
@@ -113,6 +140,12 @@ function extractZipVersion(zipPath: string): string | null {
     } catch {
         return null;
     }
+}
+
+function extractZipUrl(yaml: string, version: string): string {
+    const re = /url:\s*(Renegade-[\d.]+-win\.zip)/;
+    const m = yaml.match(re);
+    return m ? m[1] : `Renegade-${version}-win.zip`;
 }
 
 function fetchText(url: string, timeoutMs: number): Promise<string> {

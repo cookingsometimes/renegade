@@ -20,9 +20,11 @@ import {
 import {
     initUpdater,
     getAppVersion,
+    isPortable,
     checkForAppUpdate,
     downloadAppUpdate,
-    installAppUpdate,
+    installPortableUpdate,
+    launchSetupAndQuit,
 } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
@@ -421,22 +423,22 @@ const registerIpcHandlers = () => {
     });
 
     ipcMain.handle("app:getAppVersion", () => getAppVersion());
+    ipcMain.handle("app:isPortable", () => isPortable());
     ipcMain.handle("app:checkForAppUpdate", async () => {
         try {
             return await checkForAppUpdate();
         } catch {
-            return { available: false, latestVersion: "", currentVersion: "", downloadUrl: "", filename: "" };
+            return { available: false, latestVersion: "", currentVersion: "", downloadUrl: "", filename: "", isPortable: false };
         }
     });
     ipcMain.handle("app:downloadAppUpdate", async (_e, downloadUrl: string, filename: string) => {
         return downloadAppUpdate(downloadUrl, filename);
     });
-    ipcMain.handle("app:installAppUpdate", async (_e, zipPath: string) => {
-        return installAppUpdate(zipPath);
+    ipcMain.handle("app:installPortableUpdate", async (_e, filePath: string) => {
+        return installPortableUpdate(filePath);
     });
-    ipcMain.handle("app:restartApp", () => {
-        app.relaunch();
-        app.exit(0);
+    ipcMain.on("app:launchSetupAndQuit", (_e, setupPath: string) => {
+        launchSetupAndQuit(setupPath);
     });
 
     ipcMain.handle("app:setInstallComplete", () => {

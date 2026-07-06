@@ -22,6 +22,7 @@ interface AppUpdateState {
     currentVersion: string;
     downloadUrl: string;
     filename: string;
+    isPortable: boolean;
     downloading: boolean;
     bytesReceived: number;
     totalBytes: number;
@@ -61,7 +62,7 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
     });
     const [appUpdate, setAppUpdate] = useState<AppUpdateState>({
         checking: true, available: false, latestVersion: "", currentVersion: "",
-        downloadUrl: "", filename: "", downloading: false,
+        downloadUrl: "", filename: "", isPortable: true, downloading: false,
         bytesReceived: 0, totalBytes: 0, downloaded: false, zipPath: "",
         installing: false, error: "",
     });
@@ -112,6 +113,7 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                 currentVersion: result.currentVersion,
                 downloadUrl: result.downloadUrl,
                 filename: result.filename,
+                isPortable: result.isPortable,
             }));
         } catch {
             setAppUpdate((prev) => ({ ...prev, checking: false }));
@@ -230,7 +232,7 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
         try {
             const r = await window.ContextBridge.downloadAppUpdate(appUpdate.downloadUrl, appUpdate.filename);
             if (!r.success) throw new Error(r.error);
-            setAppUpdate((prev) => ({ ...prev, downloaded: true, zipPath: r.zipPath || "" }));
+            setAppUpdate((prev) => ({ ...prev, downloaded: true, zipPath: r.filePath || "" }));
         } catch (e) {
             setAppUpdate((prev) => ({ ...prev, downloading: false, error: (e as Error).message }));
         }
@@ -239,9 +241,13 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
     const handleInstallAppUpdate = async () => {
         setAppUpdate((prev) => ({ ...prev, installing: true, error: "" }));
         try {
-            const r = await window.ContextBridge.installAppUpdate(appUpdate.zipPath);
-            if (!r.success) throw new Error(r.error);
-            window.ContextBridge.restartApp();
+            if (appUpdate.isPortable) {
+                const r = await window.ContextBridge.installPortableUpdate(appUpdate.zipPath);
+                if (!r.success) throw new Error(r.error);
+                onInstallComplete();
+            } else {
+                window.ContextBridge.launchSetupAndQuit(appUpdate.zipPath);
+            }
         } catch (e) {
             setAppUpdate((prev) => ({ ...prev, installing: false, error: (e as Error).message }));
         }
@@ -451,7 +457,7 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                         {!appUpdate.checking && appUpdate.available && appUpdate.downloaded && !appUpdate.installing && (
                             <button className="download-btn primary" onClick={handleInstallAppUpdate}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-                                Install & Restart
+                                {appUpdate.isPortable ? "Install Update" : "Run Setup"}
                             </button>
                         )}
                         {!appUpdate.checking && appUpdate.available && appUpdate.installing && (
