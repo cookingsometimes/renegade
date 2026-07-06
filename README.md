@@ -38,7 +38,12 @@ pnpm package
 
 ## Repos
 
-- [RenegadeServer](https://github.com/cookingsometimes/RenegadeServer) — C# backend
+- [RenegadeServer](https://github.com/cookingsometimes/renegade-server) — C# backend
+
+## Ask AI for questions:
+
+- [Renegade Code](https://deepwiki.com/cookingsometimes/renegade)
+- [Renegade Server Code](https://deepwiki.com/cookingsometimes/renegade)
 
 ## License
 
