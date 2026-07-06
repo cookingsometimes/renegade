@@ -40,10 +40,6 @@ export const App = () => {
     const [xenoVersion, setXenoVersion] = useState("");
     const [clients, setClients] = useState<RobloxClient[]>([]);
     const [robloxProcesses, setRobloxProcesses] = useState<RobloxProcess[]>([]);
-    const [updateAvailable, setUpdateAvailable] = useState(false);
-    const [updateDownloading, setUpdateDownloading] = useState(false);
-    const [updateProgress, setUpdateProgress] = useState(0);
-    const [updateReady, setUpdateReady] = useState(false);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -51,7 +47,6 @@ export const App = () => {
         log("App mounted, loading state...");
         loadState();
         checkStatus();
-        setupUpdateListeners();
     }, []);
 
     const loadState = async () => {
@@ -82,30 +77,6 @@ export const App = () => {
             return next;
         });
     }, []);
-
-    const setupUpdateListeners = () => {
-        window.ContextBridge.onUpdateAvailable(() => {
-            log("Update available");
-            setUpdateAvailable(true);
-        });
-        window.ContextBridge.onUpdateProgress((pct: number) => {
-            setUpdateProgress(pct);
-        });
-        window.ContextBridge.onUpdateDownloaded(() => {
-            log("Update downloaded");
-            setUpdateReady(true);
-            setUpdateDownloading(false);
-        });
-    };
-
-    const handleDownloadUpdate = async () => {
-        setUpdateDownloading(true);
-        await window.ContextBridge.downloadUpdate();
-    };
-
-    const handleInstallUpdate = () => {
-        window.ContextBridge.installUpdate();
-    };
 
     const checkStatus = async () => {
         try {
@@ -378,29 +349,6 @@ export const App = () => {
         }
     };
 
-    const renderUpdateBanners = () => (
-        <>
-            {updateAvailable && !updateReady && (
-                <div className="update-banner">
-                    <span className="update-banner-text">Update available</span>
-                    {updateDownloading ? (
-                        <span className="update-banner-progress">{Math.round(updateProgress)}%</span>
-                    ) : (
-                        <button className="update-banner-btn" onClick={handleDownloadUpdate}>Download</button>
-                    )}
-                    <button className="update-banner-dismiss" onClick={() => setUpdateAvailable(false)}>×</button>
-                </div>
-            )}
-            {updateReady && (
-                <div className="update-banner ready">
-                    <span className="update-banner-text">Update ready to install</span>
-                    <button className="update-banner-btn" onClick={handleInstallUpdate}>Restart & Install</button>
-                    <button className="update-banner-dismiss" onClick={() => setUpdateReady(false)}>×</button>
-                </div>
-            )}
-        </>
-    );
-
     return (
         <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
             <TitleBar
@@ -413,7 +361,6 @@ export const App = () => {
             {appState.uiMode === "compact" ? (
                 <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
                     {renderPage()}
-                    {renderUpdateBanners()}
                 </div>
             ) : (
                 <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
@@ -428,7 +375,6 @@ export const App = () => {
                     />
                     <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
                         {renderPage()}
-                        {renderUpdateBanners()}
                     </div>
                 </div>
             )}

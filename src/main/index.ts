@@ -4,7 +4,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlink
 import { spawn, execSync, type ChildProcess } from "child_process";
 import https from "https";
 import http from "http";
-import { autoUpdater } from "electron-updater";
 import {
     initDownloader,
     downloadXeno,
@@ -18,6 +17,13 @@ import {
     SERVER_EXE,
     DATA_DIR,
 } from "./downloader";
+import {
+    initUpdater,
+    getAppVersion,
+    checkForAppUpdate,
+    downloadAppUpdate,
+    installAppUpdate,
+} from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
@@ -217,6 +223,7 @@ const safeSend = (channel: string, ...args: unknown[]) => {
 
 const registerIpcHandlers = () => {
     initDownloader(safeSend, serverRequest, restartServer);
+    initUpdater(safeSend);
 
     ipcMain.on("window:minimize", () => mainWindow?.minimize());
     ipcMain.on("window:maximize", () => {
@@ -388,23 +395,24 @@ const registerIpcHandlers = () => {
         return data;
     });
 
-    ipcMain.handle("app:checkForUpdates", async () => {
+    ipcMain.handle("app:getAppVersion", () => getAppVersion());
+    ipcMain.handle("app:checkForAppUpdate", async () => {
         try {
-            const result = await autoUpdater.checkForUpdates();
-            if (!result) return { available: false, version: "" };
-            return { available: !!result.updateInfo, version: result.updateInfo?.version || "" };
-        } catch { return { available: false, version: "" }; }
+            return await checkForAppUpdate();
+        } catch {
+            return { available: false, latestVersion: "", currentVersion: "", downloadUrl: "", filename: "" };
+        }
     });
-    ipcMain.handle("app:downloadUpdate", async () => {
-        try { await autoUpdater.downloadUpdate(); return { success: true }; }
-        catch (e) { return { success: false, error: (e as Error).message }; }
+    ipcMain.handle("app:downloadAppUpdate", async (_e, downloadUrl: string, filename: string) => {
+        return downloadAppUpdate(downloadUrl, filename);
     });
-    ipcMain.handle("app:installUpdate", () => { autoUpdater.quitAndInstall(); });
-
-    autoUpdater.on("update-available", () => safeSend("app:updateAvailable"));
-    autoUpdater.on("download-progress", (info) => safeSend("app:updateProgress", info.percent));
-    autoUpdater.on("update-downloaded", () => safeSend("app:updateDownloaded"));
-    autoUpdater.on("error", (err) => console.error("[Updater]", err.message));
+    ipcMain.handle("app:installAppUpdate", async (_e, zipPath: string) => {
+        return installAppUpdate(zipPath);
+    });
+    ipcMain.handle("app:restartApp", () => {
+        app.relaunch();
+        app.exit(0);
+    });
 };
 
 function getRobloxProcesses(): Array<{ pid: number; name: string }> {
@@ -448,12 +456,6 @@ nativeTheme.addListener("updated", () => {
     });
 
     startServer().catch((e) => console.log(`[Renegade] Background start: ${e}`));
-
-    setTimeout(() => {
-        autoUpdater.autoDownload = false;
-        autoUpdater.autoInstallOnAppQuit = true;
-        autoUpdater.checkForUpdates().catch(() => {});
-    }, 5000);
 
     app.on("before-quit", () => stopServer());
     app.on("window-all-closed", () => {

@@ -2,7 +2,7 @@ import { app } from "electron";
 import { join } from "path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, copyFileSync, createWriteStream } from "fs";
 import { execSync } from "child_process";
-import { pipeline } from "stream/promises";
+
 import https from "https";
 import http from "http";
 
@@ -92,7 +92,12 @@ function copyDirSync(src: string, dest: string): void {
     }
 }
 
-function downloadFile(url: string, dest: string, onBytes?: (n: number) => void): Promise<void> {
+export type DownloadProgress = {
+    bytesReceived: number;
+    totalBytes: number;
+};
+
+function downloadFile(url: string, dest: string, onProgress?: (p: DownloadProgress) => void): Promise<void> {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
         const mod = parsed.protocol === "https:" ? https : http;
@@ -102,35 +107,32 @@ function downloadFile(url: string, dest: string, onBytes?: (n: number) => void):
             timeout: 300000,
         }, (res) => {
             if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                console.log(`[Renegade] Download redirect to: ${res.headers.location}`);
-                downloadFile(res.headers.location, dest, onBytes).then(resolve, reject);
+                downloadFile(res.headers.location, dest, onProgress).then(resolve, reject);
                 return;
             }
-            console.log(`[Renegade] Download status: ${res.statusCode}`);
             if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
                 reject(new Error(`HTTP ${res.statusCode}`));
                 return;
             }
+            const total = parseInt(res.headers["content-length"] || "0", 10) || 0;
             const file = createWriteStream(dest);
             let received = 0;
             res.on("data", (chunk: Buffer) => {
                 received += chunk.length;
-                onBytes?.(received);
+                onProgress?.({ bytesReceived: received, totalBytes: total });
             });
-            res.on("end", () => {
-                console.log(`[Renegade] Download completed: ${received} bytes`);
+            res.pipe(file);
+            file.on("finish", () => {
+                if (total > 0 && received !== total) {
+                    reject(new Error(`Download incomplete: ${received}/${total} bytes`));
+                } else {
+                    resolve();
+                }
             });
-            pipeline(res, file).then(() => resolve()).catch(reject);
+            file.on("error", reject);
         });
-        req.on("error", (err) => {
-            console.log(`[Renegade] Download error: ${err.message}`);
-            reject(err);
-        });
-        req.on("timeout", () => {
-            console.log(`[Renegade] Download timeout`);
-            req.destroy();
-            reject(new Error("Download timeout"));
-        });
+        req.on("error", reject);
+        req.on("timeout", () => { req.destroy(); reject(new Error("Download timeout")); });
     });
 }
 
@@ -174,7 +176,7 @@ export async function downloadXeno(): Promise<{ success: boolean; version?: stri
 
             mkdirSync(versionDir, { recursive: true });
             console.log(`[Renegade] Downloading Xeno zip to ${zipPath}`);
-            await downloadFile(hit.url, zipPath, (bytes) => safeSend("app:xenoProgress", bytes));
+            await downloadFile(hit.url, zipPath, (p) => safeSend("app:xenoProgress", p));
 
             console.log(`[Renegade] Extracting Xeno to ${versionDir}`);
             extractZip(zipPath, versionDir);
@@ -226,7 +228,7 @@ export async function downloadServer(): Promise<{ success: boolean; version?: st
             mkdirSync(SERVER_DIR, { recursive: true });
             const dest = join(SERVER_DIR, src.filename);
             console.log(`[Renegade] Downloading server to ${dest}`);
-            await downloadFile(src.url, dest, (bytes) => safeSend("app:downloadProgress", bytes));
+            await downloadFile(src.url, dest, (p) => safeSend("app:serverDownloadProgress", p));
             setServerVersion(version);
             console.log(`[Renegade] Server download successful: version ${version}`);
             return { success: true, version };
