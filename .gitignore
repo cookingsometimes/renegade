@@ -27,3 +27,4 @@ package-lock.json
 *.sln
 *.sw?
 .agents
+release.ps1
