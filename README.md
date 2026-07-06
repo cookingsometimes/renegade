@@ -39,7 +39,6 @@ pnpm package
 ## Repos
 
 - [RenegadeServer](https://github.com/cookingsometimes/RenegadeServer) — C# backend
-- [Sumi API](https://github.com/cookingsometimes/sumi) — download endpoints
 
 ## License
 
