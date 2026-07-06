@@ -58,9 +58,5 @@ contextBridge.exposeInMainWorld(
         log: (level, source, message) => ipcRenderer.send("app:log", { level, source, message }),
         onToast: (cb) => ipcRenderer.on("app:toast", (_e, data) => cb(data)),
         openLogsFolder: () => ipcRenderer.invoke("app:openLogsFolder"),
-        getLogFiles: () => ipcRenderer.invoke("app:getLogFiles"),
-        readLogFile: (filename) => ipcRenderer.invoke("app:readLogFile", filename),
-        clearLogs: () => ipcRenderer.invoke("app:clearLogs"),
-        getCrashRecovery: () => ipcRenderer.invoke("app:getCrashRecovery"),
     },
 );
