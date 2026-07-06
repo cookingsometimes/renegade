@@ -70,7 +70,7 @@ Grab the latest pre-built release from GitHub and run it — no build tools requ
 
 → **[Download the latest release](https://github.com/cookingsometimes/renegade/releases/latest)**
 
-On first launch, open the **Downloads** page inside the app and you need to click download buttons!.
+On first launch, open the **Downloads** page inside the app and you need to click download buttons!
 
 Requirements:
 
