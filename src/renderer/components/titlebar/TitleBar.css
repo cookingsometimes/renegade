@@ -1,0 +1,162 @@
+.titlebar {
+    height: var(--titlebar-height);
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    -webkit-app-region: drag;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    z-index: 100;
+    flex-shrink: 0;
+}
+
+.titlebar.compact {
+    height: 40px;
+    padding: 0 10px;
+    gap: 0;
+}
+
+.titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    -webkit-app-region: drag;
+}
+
+.titlebar-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    object-fit: contain;
+}
+
+.titlebar-title-compact {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+}
+
+.titlebar-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    -webkit-app-region: no-drag;
+}
+
+.titlebar-nav-btn {
+    position: relative;
+    width: 34px;
+    height: 30px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--text-tertiary);
+    padding: 0;
+}
+
+.titlebar-nav-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.titlebar-nav-btn.active {
+    background: var(--accent-subtle);
+    color: var(--accent);
+}
+
+.titlebar-nav-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    background: var(--accent);
+    color: white;
+    font-size: 8px;
+    font-weight: 700;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.titlebar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    -webkit-app-region: no-drag;
+    margin-left: auto;
+}
+
+.titlebar-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+    margin: 0 4px;
+}
+
+.titlebar-status {
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+}
+
+.titlebar-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--error);
+    transition: background var(--transition-normal);
+}
+
+.titlebar-status-dot.online {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+.titlebar-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+    margin-left: 10px;
+    flex: 1;
+    -webkit-app-region: drag;
+}
+
+.titlebar-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    -webkit-app-region: no-drag;
+    margin-right: 4px;
+}
+
+.titlebar-btn {
+    width: 34px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--text-tertiary);
+}
+
+.titlebar-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.titlebar-btn.close:hover {
+    background: var(--error);
+    color: white;
+}
