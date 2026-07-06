@@ -124,13 +124,16 @@ export async function installPortableUpdate(filePath: string): Promise<{ success
     }
 }
 
-export function launchSetupAndQuit(setupPath: string): void {
+export function launchSetupAndQuit(setupPath: string, version: string): void {
+    if (version) setAppVersion(version);
     try {
-        shell.openPath(setupPath);
-    } catch { /* ignore */ }
+        shell.showItemInFolder(setupPath);
+    } catch {
+        try { shell.openPath(dirname(setupPath)); } catch { /* ignore */ }
+    }
     setTimeout(() => {
         app.exit(0);
-    }, 1000);
+    }, 1500);
 }
 
 function extractZipVersion(zipPath: string): string | null {

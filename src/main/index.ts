@@ -541,8 +541,8 @@ const registerIpcHandlers = () => {
     ipcMain.handle("app:installPortableUpdate", async (_e, filePath: string) => {
         return installPortableUpdate(filePath);
     });
-    ipcMain.on("app:launchSetupAndQuit", (_e, setupPath: string) => {
-        launchSetupAndQuit(setupPath);
+    ipcMain.on("app:launchSetupAndQuit", (_e, setupPath: string, version: string) => {
+        launchSetupAndQuit(setupPath, version);
     });
 
     ipcMain.handle("app:setInstallComplete", () => {

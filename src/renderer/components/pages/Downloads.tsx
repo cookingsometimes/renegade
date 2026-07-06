@@ -248,7 +248,7 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                 if (!r.success) throw new Error(r.error);
                 onInstallComplete();
             } else {
-                window.ContextBridge.launchSetupAndQuit(appUpdate.zipPath);
+                window.ContextBridge.launchSetupAndQuit(appUpdate.zipPath, appUpdate.latestVersion);
             }
         } catch (e) {
             setAppUpdate((prev) => ({ ...prev, installing: false, error: (e as Error).message }));
