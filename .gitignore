@@ -16,7 +16,7 @@ coverage
 *.local
 *.zip
 package-lock.json
-pnpm-workspace.yaml
+
 
 .vscode/.debug.env
 .idea
