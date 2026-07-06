@@ -70,14 +70,14 @@ Grab the latest pre-built release from GitHub and run it — no build tools requ
 
 → **[Download the latest release](https://github.com/cookingsometimes/renegade/releases/latest)**
 
-On first launch, open the **Downloads** page inside the app and it will pull `RenegadeServer.exe` and `Xeno.dll` for you automatically via the Sumi API.
+On first launch, open the **Downloads** page inside the app and you need to click download buttons!.
 
 Requirements:
 
 - Windows 10/11 (x64)
 - [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 - [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
-- Roblox installed (Microsoft Store or web version both work)
+- Roblox installed (Web version only.)
 
 ### Building from source (developers)
 
