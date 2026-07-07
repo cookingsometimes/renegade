@@ -35,12 +35,15 @@ export function setAppVersion(v: string): void {
 export function isPortable(): boolean {
     const exePath = app.getPath("exe");
     const exeDir = dirname(exePath);
-    const dirName = basename(exeDir);
-    if (/^Renegade-[\d.]+-win$/i.test(dirName)) return true;
-    if (existsSync(join(exeDir, "Update.exe"))) return false;
-    if (exePath.toLowerCase().includes("program files")) return false;
     const parentDir = dirname(exeDir);
-    if (existsSync(join(parentDir, "Update.exe"))) return false;
+
+    for (const dir of [exeDir, parentDir, dirname(parentDir)]) {
+        if (existsSync(join(dir, "Update.exe"))) return false;
+    }
+    if (existsSync(join(parentDir, "Uninstall.exe"))) return false;
+    if (existsSync(join(parentDir, "packages"))) return false;
+    if (/^app-[\d.]+$/i.test(basename(exeDir))) return false;
+    if (exePath.toLowerCase().includes("program files")) return false;
     return true;
 }
 
