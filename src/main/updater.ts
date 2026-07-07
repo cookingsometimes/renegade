@@ -1,9 +1,9 @@
 import { app, shell } from "electron";
 import { join, dirname, basename } from "path";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, createWriteStream } from "fs";
+import { existsSync, readFileSync, writeFileSync, createWriteStream } from "fs";
 import https from "https";
 import http from "http";
-
+import { autoUpdater } from "electron-updater";
 
 const GITHUB_LATEST = "https://github.com/cookingsometimes/renegade/releases/latest/download";
 const LATEST_YML = `${GITHUB_LATEST}/latest.yml`;
@@ -13,6 +13,34 @@ let safeSend: (channel: string, ...args: unknown[]) => void = () => {};
 
 export function initUpdater(sendFn: (channel: string, ...args: unknown[]) => void) {
     safeSend = sendFn;
+
+    if (!isPortable()) {
+        autoUpdater.autoDownload = false;
+        autoUpdater.autoInstallOnAppQuit = false;
+        autoUpdater.setFeedURL({
+            provider: "generic",
+            url: GITHUB_LATEST,
+        });
+
+        autoUpdater.on("checking-for-update", () => {
+            safeSend("app:updateEvent", { type: "checking" });
+        });
+        autoUpdater.on("update-available", (info) => {
+            safeSend("app:updateEvent", { type: "available", version: info?.version });
+        });
+        autoUpdater.on("update-not-available", () => {
+            safeSend("app:updateEvent", { type: "not-available" });
+        });
+        autoUpdater.on("error", (err) => {
+            safeSend("app:updateEvent", { type: "error", error: err?.message ?? String(err) });
+        });
+        autoUpdater.on("download-progress", (p) => {
+            safeSend("app:appUpdateProgress", { bytesReceived: p.transferred, totalBytes: p.total });
+        });
+        autoUpdater.on("update-downloaded", () => {
+            safeSend("app:updateEvent", { type: "downloaded" });
+        });
+    }
 }
 
 export function getAppVersion(): string {
@@ -47,14 +75,6 @@ export function isPortable(): boolean {
     return true;
 }
 
-function getDownloadsDir(): string {
-    return app.getPath("downloads");
-}
-
-function getSetupDir(version: string): string {
-    return join(getDownloadsDir(), `Renegade-${version}`);
-}
-
 export interface UpdateCheckResult {
     available: boolean;
     latestVersion: string;
@@ -76,6 +96,21 @@ export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
         isPortable: portable,
     };
 
+    if (!portable) {
+        try {
+            const info = await autoUpdater.checkForUpdates();
+            if (!info) return result;
+            const latest = (info.updateInfo?.version || "").replace(/^v/, "");
+            result.latestVersion = latest;
+            if (compareVersions(latest, current) > 0) {
+                result.available = true;
+            }
+            return result;
+        } catch {
+            return result;
+        }
+    }
+
     try {
         const text = await fetchText(LATEST_YML, 10000);
         const version = extractYamlValue(text, "version");
@@ -86,15 +121,9 @@ export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
 
         if (compareVersions(cleanVersion, current) > 0) {
             result.available = true;
-            if (portable) {
-                const zipFile = extractZipUrl(text, cleanVersion);
-                result.downloadUrl = `${GITHUB_LATEST}/${zipFile}`;
-                result.filename = zipFile;
-            } else {
-                const setupFile = extractYamlValue(text, "path") || `Renegade-Setup-${cleanVersion}.exe`;
-                result.downloadUrl = `${GITHUB_LATEST}/${setupFile}`;
-                result.filename = setupFile;
-            }
+            const zipFile = extractZipUrl(text, cleanVersion);
+            result.downloadUrl = `${GITHUB_LATEST}/${zipFile}`;
+            result.filename = zipFile;
         }
 
         return result;
@@ -104,16 +133,17 @@ export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
 }
 
 export async function downloadAppUpdate(downloadUrl: string, filename: string): Promise<{ success: boolean; filePath?: string; error?: string }> {
-    try {
-        const portable = isPortable();
-        let destDir: string;
-        if (portable) {
-            destDir = getDownloadsDir();
-        } else {
-            const version = filename.match(/(\d+\.\d+\.\d+)/)?.[1] || "latest";
-            destDir = getSetupDir(version);
-            mkdirSync(destDir, { recursive: true });
+    if (!isPortable()) {
+        try {
+            autoUpdater.downloadUpdate();
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: (e as Error).message };
         }
+    }
+
+    try {
+        const destDir = app.getPath("downloads");
         const filePath = join(destDir, filename);
 
         await downloadFile(downloadUrl, filePath, (bytes, total) => {
@@ -135,6 +165,10 @@ export function finalizeAndQuit(filePath: string, version: string): void {
     setTimeout(() => {
         app.exit(0);
     }, 1500);
+}
+
+export function quitAndInstall(): void {
+    autoUpdater.quitAndInstall();
 }
 
 function fetchText(url: string, timeoutMs: number): Promise<string> {

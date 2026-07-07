@@ -103,7 +103,9 @@ export type ContextBridge = {
     checkForAppUpdate: () => Promise<{ available: boolean; latestVersion: string; currentVersion: string; downloadUrl: string; filename: string; isPortable: boolean }>;
     downloadAppUpdate: (downloadUrl: string, filename: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
     finalizeAndQuit: (filePath: string, version: string) => void;
+    quitAndInstall: () => void;
     onAppUpdateProgress: (cb: (p: { bytesReceived: number; totalBytes: number }) => void) => void;
+    onUpdateEvent: (cb: (evt: { type: string; version?: string; error?: string }) => void) => void;
     setWindowSize: (width: number, height: number) => void;
     centerWindow: () => void;
     setAlwaysOnTop: (onTop: boolean) => void;

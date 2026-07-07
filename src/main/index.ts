@@ -24,6 +24,7 @@ import {
     checkForAppUpdate,
     downloadAppUpdate,
     finalizeAndQuit,
+    quitAndInstall,
 } from "./updater";
 import * as logger from "./logger";
 
@@ -36,7 +37,6 @@ const SERVER_PORT = 3420;
 
 const SRC = "Main";
 
-// Redirect unhandled errors to logger before any IPC exists
 function setupGlobalErrorHandlers(): void {
     process.on("uncaughtException", (err) => {
         logger.error(SRC, `Uncaught exception: ${err.message}`, err);
@@ -540,6 +540,9 @@ const registerIpcHandlers = () => {
     ipcMain.on("app:finalizeAndQuit", (_e, filePath: string, version: string) => {
         finalizeAndQuit(filePath, version);
     });
+    ipcMain.on("app:quitAndInstall", () => {
+        quitAndInstall();
+    });
 
     ipcMain.handle("app:setInstallComplete", () => {
         const flagPath = join(app.getPath("userData"), ".install-complete");
@@ -554,8 +557,6 @@ const registerIpcHandlers = () => {
         }
         return false;
     });
-
-    // --- Logging IPC ---
 
     ipcMain.on("app:log", (_e, entry: { level: string; source: string; message: string }) => {
         const lvl = entry.level || "INFO";

@@ -85,6 +85,17 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
         window.ContextBridge.onAppUpdateProgress((p: { bytesReceived: number; totalBytes: number }) => {
             setAppUpdate((prev) => ({ ...prev, bytesReceived: p.bytesReceived, totalBytes: p.totalBytes }));
         });
+        window.ContextBridge.onUpdateEvent((evt: { type: string; version?: string; error?: string }) => {
+            if (evt.type === "available") {
+                setAppUpdate((prev) => ({ ...prev, available: true, latestVersion: evt.version || prev.latestVersion }));
+            } else if (evt.type === "not-available") {
+                setAppUpdate((prev) => ({ ...prev, available: false }));
+            } else if (evt.type === "downloaded") {
+                setAppUpdate((prev) => ({ ...prev, downloaded: true, downloading: false }));
+            } else if (evt.type === "error") {
+                setAppUpdate((prev) => ({ ...prev, downloading: false, error: evt.error || "Update failed" }));
+            }
+        });
         refreshStatus();
         checkAppUpdate();
     }, []);
@@ -240,7 +251,11 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
     };
 
     const handleFinalizeAndQuit = () => {
-        window.ContextBridge.finalizeAndQuit(appUpdate.zipPath, appUpdate.latestVersion);
+        if (appUpdate.isPortable) {
+            window.ContextBridge.finalizeAndQuit(appUpdate.zipPath, appUpdate.latestVersion);
+        } else {
+            window.ContextBridge.quitAndInstall();
+        }
     };
 
     const allReady = server.status === "ready" && xeno.status === "ready";
@@ -447,7 +462,7 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                         {!appUpdate.checking && appUpdate.available && appUpdate.downloaded && (
                             <button className="download-btn primary" onClick={handleFinalizeAndQuit}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-                                {appUpdate.isPortable ? "Install Update" : "Open Folder"}
+                                {appUpdate.isPortable ? "Install Update" : "Restart to Update"}
                             </button>
                         )}
                         {!appUpdate.checking && !appUpdate.available && (
