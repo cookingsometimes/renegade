@@ -482,14 +482,17 @@ const registerIpcHandlers = () => {
 
     ipcMain.handle("app:checkServerUpdate", async () => {
         const current = getServerVersionFile();
-        if (!current) return { needsUpdate: false, latestVersion: "" };
         try {
             const c = new AbortController();
             const t = setTimeout(() => c.abort(), 10000);
-            const res = await fetch(`https://sumi-api.netlify.app/api/v0/renegade/server/download?myversion=${encodeURIComponent(current)}`, { signal: c.signal });
+            const res = await fetch("https://api.github.com/repos/cookingsometimes/renegade-server/releases/latest", { signal: c.signal });
             clearTimeout(t);
             if (!res.ok) return { needsUpdate: false, latestVersion: "" };
-            return await res.json();
+            const data = await res.json() as { tag_name?: string };
+            const latestVersion = (data.tag_name || "").replace(/^v/, "");
+            if (!latestVersion) return { needsUpdate: false, latestVersion: "" };
+            if (!current) return { needsUpdate: true, latestVersion };
+            return { needsUpdate: current !== latestVersion, latestVersion };
         } catch {
             logger.warn(SRC, "Server update check failed");
             return { needsUpdate: false, latestVersion: "" };

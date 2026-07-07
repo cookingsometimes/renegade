@@ -18,6 +18,8 @@ export const XENO_DIR = join(DATA_DIR, "xeno");
 export const XENO_VERSIONS_DIR = join(DATA_DIR, "xeno-versions");
 export const SUMI_SERVER_API = "https://sumi-api.netlify.app/api/v0/renegade/server/download";
 export const SUMI_XENO_API = "https://sumi-api.netlify.app/api/v0/rblx/executors/dl/xeno";
+export const GITHUB_SERVER_API = "https://api.github.com/repos/cookingsometimes/renegade-server/releases/latest";
+export const GITHUB_SERVER_DOWNLOAD = "https://github.com/cookingsometimes/renegade-server/releases/latest/download/RenegadeServer.exe";
 export const VELOCITY_DIR = join(DATA_DIR, "velocity");
 export const VELOCITY_VERSION_FILE = join(VELOCITY_DIR, "current_version.txt");
 export const VELOCITY_VERSION_URL = "https://realvelocity.xyz/assets/current_version.txt";
@@ -227,21 +229,22 @@ export async function downloadServer(): Promise<{ success: boolean; version?: st
             logger.info(SRC, `Starting server download attempt ${attempt}/${MAX_RETRIES}`);
             safeSend("app:serverRetry", { attempt, max: MAX_RETRIES });
 
-            const c = new AbortController();
-            const t = setTimeout(() => c.abort(), 10000);
-            const res = await fetch(SUMI_SERVER_API, { signal: c.signal });
-            clearTimeout(t);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-            const data = await res.json() as { sources?: Array<{ url: string; filename: string }>; version?: string; latestVersion?: string };
-            if (!data.sources || data.sources.length === 0) throw new Error("No download sources");
-            const src = data.sources[0];
-            const version = data.latestVersion || data.version || "1.0.0";
+            let version = "unknown";
+            try {
+                const c = new AbortController();
+                const t = setTimeout(() => c.abort(), 10000);
+                const res = await fetch(GITHUB_SERVER_API, { signal: c.signal });
+                clearTimeout(t);
+                if (res.ok) {
+                    const data = await res.json() as { tag_name?: string };
+                    if (data.tag_name) version = data.tag_name.replace(/^v/, "");
+                }
+            } catch { /* ignore, use fallback */ }
 
             mkdirSync(SERVER_DIR, { recursive: true });
-            const dest = join(SERVER_DIR, src.filename);
-            logger.info(SRC, `Downloading server to ${dest}`);
-            await downloadFile(src.url, dest, (p) => safeSend("app:serverDownloadProgress", p));
+            const dest = join(SERVER_DIR, SERVER_EXE);
+            logger.info(SRC, `Downloading server from GitHub to ${dest}`);
+            await downloadFile(GITHUB_SERVER_DOWNLOAD, dest, (p) => safeSend("app:serverDownloadProgress", p));
             setServerVersion(version);
             logger.info(SRC, `Server download successful: version ${version}`);
             return { success: true, version };

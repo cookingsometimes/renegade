@@ -75,6 +75,7 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
         bytesReceived: 0, totalBytes: 0, downloaded: false, filePath: "",
         error: "",
     });
+    const [serverUpdate, setServerUpdate] = useState({ checking: false, available: false, latestVersion: "" });
     const initRef = useRef(false);
 
     useEffect(() => {
@@ -103,7 +104,18 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
         });
         refreshStatus();
         checkAppUpdate();
+        checkServerUpdate();
     }, []);
+
+    const checkServerUpdate = async () => {
+        setServerUpdate((prev) => ({ ...prev, checking: true }));
+        try {
+            const result = await window.ContextBridge.checkServerUpdate();
+            setServerUpdate({ checking: false, available: result.needsUpdate, latestVersion: result.latestVersion });
+        } catch {
+            setServerUpdate((prev) => ({ ...prev, checking: false }));
+        }
+    };
 
     useEffect(() => {
         if (serverInstalled && serverRunning && server.status !== "ready") {
@@ -332,8 +344,9 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                                 <span className="download-card-name">RenegadeServer</span>
                                 <span className="download-card-version">{server.version || "Not installed"}</span>
                             </div>
-                            <div className={`download-status-badge ${server.status}`}>
-                                {server.status === "ready" && "Ready"}
+                            <div className={`download-status-badge ${serverUpdate.available && server.status === "ready" ? "updating" : server.status}`}>
+                                {server.status === "ready" && serverUpdate.available && "Update available"}
+                                {server.status === "ready" && !serverUpdate.available && "Ready"}
                                 {server.status === "installed" && "Installed"}
                                 {server.status === "downloading" && "Downloading"}
                                 {server.status === "starting" && "Starting"}
@@ -381,22 +394,28 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                                     Retry
                                 </button>
                             )}
-                            {server.status === "ready" && (
-                                <div className="download-card-actions-row">
-                                    <div className="download-ready-badge">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-                                        Running
-                                    </div>
-                                    <button className="download-btn" onClick={handleRestartServer}>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
-                                        Restart
-                                    </button>
-                                    <button className="download-btn" onClick={handleReinstallServer}>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
-                                        Reinstall
-                                    </button>
+                        {server.status === "ready" && (
+                            <div className="download-card-actions-row">
+                                <div className="download-ready-badge">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                                    Running
                                 </div>
-                            )}
+                                {serverUpdate.available && (
+                                    <button className="download-btn primary" onClick={handleReinstallServer}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                        Update to v{serverUpdate.latestVersion}
+                                    </button>
+                                )}
+                                <button className="download-btn" onClick={handleRestartServer}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
+                                    Restart
+                                </button>
+                                <button className="download-btn" onClick={handleReinstallServer}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
+                                    Reinstall
+                                </button>
+                            </div>
+                        )}
                         </div>
                     </div>
 

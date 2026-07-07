@@ -194,6 +194,11 @@
     color: var(--text-tertiary);
 }
 
+.download-status-badge.updating {
+    background: var(--warning-subtle);
+    color: var(--warning);
+}
+
 .download-progress-section {
     display: flex;
     flex-direction: column;
