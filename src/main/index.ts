@@ -20,11 +20,10 @@ import {
 import {
     initUpdater,
     getAppVersion,
-    isPortable,
     checkForAppUpdate,
     downloadAppUpdate,
-    finalizeAndQuit,
-    quitAndInstall,
+    finalizePortable,
+    finalizeSetup,
 } from "./updater";
 import * as logger from "./logger";
 
@@ -541,23 +540,22 @@ const registerIpcHandlers = () => {
     });
 
     ipcMain.handle("app:getAppVersion", () => getAppVersion());
-    ipcMain.handle("app:isPortable", () => isPortable());
     ipcMain.handle("app:checkForAppUpdate", async () => {
         try {
             return await checkForAppUpdate();
         } catch (e) {
             logger.error(SRC, "App update check failed", e instanceof Error ? e : undefined);
-            return { available: false, latestVersion: "", currentVersion: "", downloadUrl: "", filename: "", isPortable: false };
+            return { available: false, latestVersion: "", currentVersion: "", portableUrl: "", portableFilename: "", setupUrl: "", setupFilename: "" };
         }
     });
     ipcMain.handle("app:downloadAppUpdate", async (_e, downloadUrl: string, filename: string) => {
         return downloadAppUpdate(downloadUrl, filename);
     });
-    ipcMain.on("app:finalizeAndQuit", (_e, filePath: string, version: string) => {
-        finalizeAndQuit(filePath, version);
+    ipcMain.on("app:finalizePortable", (_e, filePath: string, version: string) => {
+        finalizePortable(filePath, version);
     });
-    ipcMain.on("app:quitAndInstall", () => {
-        quitAndInstall();
+    ipcMain.on("app:finalizeSetup", (_e, filePath: string, version: string) => {
+        finalizeSetup(filePath, version);
     });
 
     ipcMain.handle("app:setInstallComplete", () => {

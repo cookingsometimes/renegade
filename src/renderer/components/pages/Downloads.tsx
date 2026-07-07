@@ -20,14 +20,16 @@ interface AppUpdateState {
     available: boolean;
     latestVersion: string;
     currentVersion: string;
-    downloadUrl: string;
-    filename: string;
-    isPortable: boolean;
+    portableUrl: string;
+    portableFilename: string;
+    setupUrl: string;
+    setupFilename: string;
     downloading: boolean;
+    downloadType: "portable" | "setup" | null;
     bytesReceived: number;
     totalBytes: number;
     downloaded: boolean;
-    zipPath: string;
+    filePath: string;
     error: string;
 }
 
@@ -61,8 +63,9 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
     });
     const [appUpdate, setAppUpdate] = useState<AppUpdateState>({
         checking: true, available: false, latestVersion: "", currentVersion: "",
-        downloadUrl: "", filename: "", isPortable: true, downloading: false,
-        bytesReceived: 0, totalBytes: 0, downloaded: false, zipPath: "",
+        portableUrl: "", portableFilename: "", setupUrl: "", setupFilename: "",
+        downloading: false, downloadType: null,
+        bytesReceived: 0, totalBytes: 0, downloaded: false, filePath: "",
         error: "",
     });
     const initRef = useRef(false);
@@ -84,17 +87,6 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
         });
         window.ContextBridge.onAppUpdateProgress((p: { bytesReceived: number; totalBytes: number }) => {
             setAppUpdate((prev) => ({ ...prev, bytesReceived: p.bytesReceived, totalBytes: p.totalBytes }));
-        });
-        window.ContextBridge.onUpdateEvent((evt: { type: string; version?: string; error?: string }) => {
-            if (evt.type === "available") {
-                setAppUpdate((prev) => ({ ...prev, available: true, latestVersion: evt.version || prev.latestVersion }));
-            } else if (evt.type === "not-available") {
-                setAppUpdate((prev) => ({ ...prev, available: false }));
-            } else if (evt.type === "downloaded") {
-                setAppUpdate((prev) => ({ ...prev, downloaded: true, downloading: false }));
-            } else if (evt.type === "error") {
-                setAppUpdate((prev) => ({ ...prev, downloading: false, error: evt.error || "Update failed" }));
-            }
         });
         refreshStatus();
         checkAppUpdate();
@@ -121,9 +113,10 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                 available: result.available,
                 latestVersion: result.latestVersion,
                 currentVersion: result.currentVersion,
-                downloadUrl: result.downloadUrl,
-                filename: result.filename,
-                isPortable: result.isPortable,
+                portableUrl: result.portableUrl,
+                portableFilename: result.portableFilename,
+                setupUrl: result.setupUrl,
+                setupFilename: result.setupFilename,
             }));
         } catch {
             setAppUpdate((prev) => ({ ...prev, checking: false }));
@@ -239,22 +232,24 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
         setTimeout(() => handleDownloadXeno(), 100);
     };
 
-    const handleDownloadAppUpdate = async () => {
-        setAppUpdate((prev) => ({ ...prev, downloading: true, downloaded: false, bytesReceived: 0, totalBytes: 0, error: "" }));
+    const handleDownloadAppUpdate = async (type: "portable" | "setup") => {
+        const url = type === "portable" ? appUpdate.portableUrl : appUpdate.setupUrl;
+        const filename = type === "portable" ? appUpdate.portableFilename : appUpdate.setupFilename;
+        setAppUpdate((prev) => ({ ...prev, downloading: true, downloadType: type, downloaded: false, bytesReceived: 0, totalBytes: 0, error: "" }));
         try {
-            const r = await window.ContextBridge.downloadAppUpdate(appUpdate.downloadUrl, appUpdate.filename);
+            const r = await window.ContextBridge.downloadAppUpdate(url, filename);
             if (!r.success) throw new Error(r.error);
-            setAppUpdate((prev) => ({ ...prev, downloaded: true, zipPath: r.filePath || "" }));
+            setAppUpdate((prev) => ({ ...prev, downloaded: true, filePath: r.filePath || "" }));
         } catch (e) {
-            setAppUpdate((prev) => ({ ...prev, downloading: false, error: (e as Error).message }));
+            setAppUpdate((prev) => ({ ...prev, downloading: false, downloadType: null, error: (e as Error).message }));
         }
     };
 
-    const handleFinalizeAndQuit = () => {
-        if (appUpdate.isPortable) {
-            window.ContextBridge.finalizeAndQuit(appUpdate.zipPath, appUpdate.latestVersion);
+    const handleFinalizeUpdate = () => {
+        if (appUpdate.downloadType === "portable") {
+            window.ContextBridge.finalizePortable(appUpdate.filePath, appUpdate.latestVersion);
         } else {
-            window.ContextBridge.quitAndInstall();
+            window.ContextBridge.finalizeSetup(appUpdate.filePath, appUpdate.latestVersion);
         }
     };
 
@@ -448,21 +443,27 @@ export const Downloads = ({ serverInstalled, serverRunning, serverVersion, xenoI
                             <span className="download-checking-text">Checking for updates...</span>
                         )}
                         {!appUpdate.checking && appUpdate.available && !appUpdate.downloading && !appUpdate.downloaded && (
-                            <button className="download-btn primary" onClick={handleDownloadAppUpdate}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                                Download v{appUpdate.latestVersion}
-                            </button>
+                            <div className="download-card-actions-row">
+                                <button className="download-btn primary" onClick={() => handleDownloadAppUpdate("portable")}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                    Portable
+                                </button>
+                                <button className="download-btn primary" onClick={() => handleDownloadAppUpdate("setup")}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                    Setup
+                                </button>
+                            </div>
                         )}
                         {!appUpdate.checking && appUpdate.available && appUpdate.downloading && !appUpdate.downloaded && (
                             <span className="download-ready-badge">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" /><line x1="4.93" y1="4.93" x2="7.76" y2="7.76" /><line x1="16.24" y1="16.24" x2="19.07" y2="19.07" /></svg>
-                                Downloading...
+                                Downloading {appUpdate.downloadType === "portable" ? "Portable" : "Setup"}...
                             </span>
                         )}
                         {!appUpdate.checking && appUpdate.available && appUpdate.downloaded && (
-                            <button className="download-btn primary" onClick={handleFinalizeAndQuit}>
+                            <button className="download-btn primary" onClick={handleFinalizeUpdate}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-                                {appUpdate.isPortable ? "Install Update" : "Restart to Update"}
+                                {appUpdate.downloadType === "portable" ? "Show in Explorer" : "Run Installer"}
                             </button>
                         )}
                         {!appUpdate.checking && !appUpdate.available && (
