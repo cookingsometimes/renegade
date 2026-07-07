@@ -110,6 +110,9 @@ export type ContextBridge = {
     centerWindow: () => void;
     setAlwaysOnTop: (onTop: boolean) => void;
     isAlwaysOnTop: () => Promise<boolean>;
+    setIgnoreMouseEvents: (ignore: boolean) => void;
+    setFullScreen: (full: boolean) => void;
+    maximizeWindow: () => void;
 
     log: (level: string, source: string, message: string) => void;
     onToast: (cb: (data: ToastData) => void) => void;

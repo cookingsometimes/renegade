@@ -1,6 +1,8 @@
 export type PageId = "dashboard" | "execute" | "clients" | "scripts" | "logs" | "settings" | "about" | "downloads";
 
-export type UiMode = "full" | "compact";
+export type UiMode = "full" | "compact" | "overlay";
+
+export type SidebarPosition = "left" | "right" | "top";
 
 export type RobloxClient = [pid: number, name: string, version: string, state: number, timestamp: number];
 
@@ -56,6 +58,8 @@ export type XenoStatus = {
     attached: boolean;
 };
 
+export type PanelPosition = { x: number; y: number; width: number; height: number };
+
 export type AppState = {
     activePage: PageId;
     uiMode: UiMode;
@@ -65,4 +69,7 @@ export type AppState = {
     autoInject: boolean;
     selectedPids: number[];
     alwaysOnTop: boolean;
+    sidebarPosition: SidebarPosition;
+    openPanels: string[];
+    panelPositions: Record<string, PanelPosition>;
 };

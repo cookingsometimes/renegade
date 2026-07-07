@@ -55,6 +55,9 @@ contextBridge.exposeInMainWorld(
         onUpdateEvent: (cb) => ipcRenderer.on("app:updateEvent", (_e, evt) => cb(evt)),
         setAlwaysOnTop: (onTop) => ipcRenderer.send("window:setAlwaysOnTop", onTop),
         isAlwaysOnTop: () => ipcRenderer.invoke("app:isAlwaysOnTop"),
+        setIgnoreMouseEvents: (ignore) => ipcRenderer.send("app:setIgnoreMouseEvents", ignore),
+        setFullScreen: (full) => ipcRenderer.send("app:setFullScreen", full),
+        maximizeWindow: () => ipcRenderer.send("app:maximizeWindow"),
 
         log: (level, source, message) => ipcRenderer.send("app:log", { level, source, message }),
         onToast: (cb) => ipcRenderer.on("app:toast", (_e, data) => cb(data)),

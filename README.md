@@ -26,7 +26,7 @@ Carried over from the Xeno Legacy UI:
 What Renegade adds on top:
 
 - **Built-in downloader** — installs and updates `RenegadeServer.exe` and `Xeno.dll` from inside the app via the Sumi API, no manual DLL hunting
-- **Two UI modes** — Compact (750×560, centered nav) or Full (1200×800, sidebar), switch on the fly
+- **Three UI modes** — Compact (750×560, centered nav), Full (1200×800, sidebar), or Overlay (a minimal HUD overlay interface inspired by the "Wave" exploit), switchable on the fly
 - **Live logs and settings** — server logs and Xeno settings are exposed in-app, not hidden behind a console
 
 ---

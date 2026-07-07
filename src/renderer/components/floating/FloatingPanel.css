@@ -1,0 +1,68 @@
+.floating-panel {
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    pointer-events: auto;
+}
+
+.floating-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    height: 36px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    cursor: grab;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.floating-panel-header:active {
+    cursor: grabbing;
+}
+
+.floating-panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.floating-panel-content {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+}
+
+.floating-panel-resize-handle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    opacity: 0.3;
+}
+
+.floating-panel-resize-handle::after {
+    content: "";
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--text-tertiary);
+    border-bottom: 2px solid var(--text-tertiary);
+}
+
+.floating-panel:hover .floating-panel-resize-handle {
+    opacity: 0.6;
+}

@@ -263,7 +263,7 @@ const createWindow = (): BrowserWindow => {
         icon: join(__dirname, "..", "build", "icon.png"),
         title: "Renegade",
         show: false,
-        backgroundColor: "#0f0f12",
+        transparent: true,
     });
     win.once("ready-to-show", () => { win.show(); win.focus(); });
     return win;
@@ -325,6 +325,22 @@ const registerIpcHandlers = () => {
         }
     });
     ipcMain.handle("app:isAlwaysOnTop", () => mainWindow?.isAlwaysOnTop() ?? false);
+
+    ipcMain.on("app:setIgnoreMouseEvents", (_e, ignore: boolean) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setIgnoreMouseEvents(ignore, { forward: true });
+        }
+    });
+    ipcMain.on("app:setFullScreen", (_e, full: boolean) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setFullScreen(full);
+        }
+    });
+    ipcMain.on("app:maximizeWindow", () => {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMaximized()) {
+            mainWindow.maximize();
+        }
+    });
 
     ipcMain.handle("app:getServerStatus", async () => {
         const installed = isServerInstalled();

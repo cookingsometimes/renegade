@@ -1,4 +1,4 @@
-import type { UiMode } from "@common/types";
+import type { UiMode, SidebarPosition } from "@common/types";
 import "./Settings.css";
 
 interface Props {
@@ -8,9 +8,11 @@ interface Props {
     onAutoInjectToggle: () => void;
     alwaysOnTop: boolean;
     onAlwaysOnTopToggle: () => void;
+    sidebarPosition: SidebarPosition;
+    onSidebarPositionChange: (pos: SidebarPosition) => void;
 }
 
-export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggle, alwaysOnTop, onAlwaysOnTopToggle }: Props) => {
+export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggle, alwaysOnTop, onAlwaysOnTopToggle, sidebarPosition, onSidebarPositionChange }: Props) => {
     return (
         <div className="settings">
             <div className="page-header">
@@ -45,6 +47,16 @@ export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggl
                             </svg>
                             Compact
                         </button>
+                        <button
+                            className={`settings-mode-btn ${uiMode === "overlay" ? "active" : ""}`}
+                            onClick={() => onUiModeChange("overlay")}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2" />
+                                <rect x="8" y="7" width="12" height="10" rx="1" fill="none" />
+                            </svg>
+                            Overlay
+                        </button>
                     </div>
                 </div>
             </div>
@@ -63,6 +75,34 @@ export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggl
                         <span className="settings-toggle-thumb" />
                     </button>
                 </div>
+                {uiMode === "overlay" && (
+                    <div className="settings-row" style={{ marginTop: 8 }}>
+                        <div className="settings-row-info">
+                            <span className="settings-row-title">Sidebar Position</span>
+                            <span className="settings-row-desc">Position of the floating sidebar on screen</span>
+                        </div>
+                        <div className="settings-mode-switch">
+                            <button
+                                className={`settings-mode-btn ${sidebarPosition === "left" ? "active" : ""}`}
+                                onClick={() => onSidebarPositionChange("left")}
+                            >
+                                Left
+                            </button>
+                            <button
+                                className={`settings-mode-btn ${sidebarPosition === "right" ? "active" : ""}`}
+                                onClick={() => onSidebarPositionChange("right")}
+                            >
+                                Right
+                            </button>
+                            <button
+                                className={`settings-mode-btn ${sidebarPosition === "top" ? "active" : ""}`}
+                                onClick={() => onSidebarPositionChange("top")}
+                            >
+                                Top
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="settings-section">

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TitleBar } from "./components/titlebar/TitleBar";
 import { Sidebar } from "./components/layout/Sidebar";
+import { FloatingSidebar } from "./components/floating/FloatingSidebar";
+import { FloatingPanel } from "./components/floating/FloatingPanel";
 import { Dashboard } from "./components/pages/Dashboard";
 import { Execute } from "./components/pages/Execute";
 import { Clients } from "./components/pages/Clients";
@@ -9,7 +11,7 @@ import { Logs } from "./components/pages/Logs";
 import { Settings } from "./components/pages/Settings";
 import { About } from "./components/pages/About";
 import { Downloads } from "./components/pages/Downloads";
-import type { AppState, PageId, RobloxClient, ScriptTab, UiMode } from "@common/types";
+import type { AppState, PageId, RobloxClient, ScriptTab, UiMode, SidebarPosition } from "@common/types";
 import type { ToastData } from "@common/ContextBridge";
 import "./styles/global.css";
 
@@ -28,6 +30,9 @@ const DEFAULT_STATE: AppState = {
     autoInject: false,
     selectedPids: [],
     alwaysOnTop: false,
+    sidebarPosition: "left",
+    openPanels: [],
+    panelPositions: {},
 };
 
 const log = (msg: string) => console.log(`[Renegade:UI] ${msg}`);
@@ -76,7 +81,16 @@ export const App = () => {
                     autoInject: typeof saved.autoInject === "boolean" ? saved.autoInject : prev.autoInject,
                     selectedPids: Array.isArray(saved.selectedPids) ? saved.selectedPids as number[] : prev.selectedPids,
                     alwaysOnTop: typeof saved.alwaysOnTop === "boolean" ? saved.alwaysOnTop : prev.alwaysOnTop,
+                    sidebarPosition: (saved.sidebarPosition as SidebarPosition) || prev.sidebarPosition,
+                    openPanels: Array.isArray(saved.openPanels) ? saved.openPanels as string[] : prev.openPanels,
+                    panelPositions: saved.panelPositions && typeof saved.panelPositions === "object" ? saved.panelPositions as Record<string, { x: number; y: number; width: number; height: number }> : prev.panelPositions,
                 }));
+                if (Array.isArray(saved.openPanels)) {
+                    setOpenPanels(saved.openPanels as string[]);
+                }
+                if (saved.panelPositions && typeof saved.panelPositions === "object") {
+                    setPanelPositions(saved.panelPositions as Record<string, { x: number; y: number; width: number; height: number }>);
+                }
             }
         } catch { /* ignore */ }
     };
@@ -237,9 +251,112 @@ export const App = () => {
         } catch { /* ignore */ }
     };
 
+    const [openPanels, setOpenPanels] = useState<string[]>(DEFAULT_STATE.openPanels);
+    const [panelPositions, setPanelPositions] = useState<Record<string, { x: number; y: number; width: number; height: number }>>(DEFAULT_STATE.panelPositions);
+    const [panelZIndices, setPanelZIndices] = useState<Record<string, number>>({});
+    const maxZIndexRef = useRef(100);
+
+    const handleFocusPanel = useCallback((panelId: string) => {
+        maxZIndexRef.current += 1;
+        setPanelZIndices((z) => ({ ...z, [panelId]: maxZIndexRef.current }));
+    }, []);
+
+    const handleOpenPanel = useCallback((panelId: string) => {
+        setOpenPanels((prev) => {
+            let next: string[];
+            if (prev.includes(panelId)) {
+                next = prev.filter((id) => id !== panelId);
+            } else {
+                next = [...prev, panelId];
+                setPanelPositions((p) => {
+                    if (p[panelId]) return p;
+                    const size = PANEL_SIZES[panelId] || { width: 420, height: 360 };
+                    const index = next.length - 1;
+                    return {
+                        ...p,
+                        [panelId]: { x: 100 + (index % 3) * 40, y: 60 + (index % 4) * 40, width: size.width, height: size.height },
+                    };
+                });
+            }
+            setTimeout(() => {
+                setAppState((s) => {
+                    const updated = { ...s, openPanels: next };
+                    window.ContextBridge.saveAppState(updated).catch(() => {});
+                    return updated;
+                });
+            }, 0);
+            return next;
+        });
+        handleFocusPanel(panelId);
+    }, [handleFocusPanel]);
+
+    const handleMovePanel = useCallback((panelId: string, x: number, y: number) => {
+        setPanelPositions((p) => {
+            const next = { ...p, [panelId]: { ...p[panelId], x, y } };
+            setTimeout(() => {
+                setAppState((s) => {
+                    const updated = { ...s, panelPositions: next };
+                    window.ContextBridge.saveAppState(updated).catch(() => {});
+                    return updated;
+                });
+            }, 0);
+            return next;
+        });
+    }, []);
+
+    const handleResizePanel = useCallback((panelId: string, width: number, height: number) => {
+        setPanelPositions((p) => {
+            const next = { ...p, [panelId]: { ...p[panelId], width, height } };
+            setTimeout(() => {
+                setAppState((s) => {
+                    const updated = { ...s, panelPositions: next };
+                    window.ContextBridge.saveAppState(updated).catch(() => {});
+                    return updated;
+                });
+            }, 0);
+            return next;
+        });
+    }, []);
+
+    const handleInteractiveEnter = useCallback(() => {}, []);
+    const handleInteractiveLeave = useCallback(() => {}, []);
+
+    useEffect(() => {
+        if (appState.uiMode === "overlay") {
+            document.documentElement.classList.add("overlay-mode");
+            document.body.classList.add("overlay-mode");
+            window.ContextBridge.maximizeWindow();
+            window.ContextBridge.setAlwaysOnTop(true);
+            window.ContextBridge.setIgnoreMouseEvents(true);
+
+            const handleMouseMove = (e: MouseEvent) => {
+                const target = e.target as HTMLElement;
+                const isOverInteractive = target.closest(".floating-panel") || target.closest(".floating-sidebar");
+                if (isOverInteractive) {
+                    window.ContextBridge.setIgnoreMouseEvents(false);
+                } else {
+                    window.ContextBridge.setIgnoreMouseEvents(true);
+                }
+            };
+
+            document.addEventListener("mousemove", handleMouseMove);
+            return () => {
+                document.removeEventListener("mousemove", handleMouseMove);
+            };
+        } else {
+            document.documentElement.classList.remove("overlay-mode");
+            document.body.classList.remove("overlay-mode");
+            window.ContextBridge.setAlwaysOnTop(false);
+            window.ContextBridge.setIgnoreMouseEvents(false);
+        }
+    }, [appState.uiMode]);
+
     const handlePageChange = useCallback((page: PageId) => {
         saveState({ activePage: page });
-    }, [saveState]);
+        if (appState.uiMode === "overlay") {
+            handleOpenPanel(page);
+        }
+    }, [saveState, appState.uiMode, handleOpenPanel]);
 
     const handleToggleCollapse = useCallback(() => {
         setAppState((prev) => {
@@ -321,16 +438,38 @@ export const App = () => {
         });
     }, [saveState]);
 
-    if (loading) {
-        return (
-            <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-                <TitleBar uiMode={appState.uiMode} />
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-primary)" }}>
-                    <div style={{ color: "var(--text-tertiary)", fontSize: 13 }}>Loading...</div>
-                </div>
-            </div>
-        );
-    }
+    const handleSidebarPositionChange = useCallback((pos: SidebarPosition) => {
+        saveState({ sidebarPosition: pos });
+    }, [saveState]);
+
+    const PANEL_TITLES: Record<string, string> = {
+        dashboard: "Dashboard", downloads: "Downloads", execute: "Execute",
+        clients: "Clients", scripts: "Script Hub", logs: "Logs", settings: "Settings",
+    };
+
+    const PANEL_SIZES: Record<string, { width: number; height: number }> = {
+        dashboard: { width: 420, height: 360 },
+        execute: { width: 600, height: 480 },
+        downloads: { width: 480, height: 400 },
+        clients: { width: 440, height: 380 },
+        scripts: { width: 500, height: 440 },
+        logs: { width: 500, height: 400 },
+        settings: { width: 460, height: 440 },
+    };
+
+    const renderPanelContent = (panelId: string) => {
+        switch (panelId) {
+            case "dashboard": return <Dashboard serverRunning={serverRunning} serverVersion={serverVersion} clientCount={clients.length} onNavigate={handlePageChange} onAttach={handleAttach} />;
+            case "downloads": return <Downloads serverInstalled={serverInstalled} serverRunning={serverRunning} serverVersion={serverVersion} xenoInstalled={xenoInstalled} xenoVersion={xenoVersion} onReady={handleDownloadsReady} onInstallComplete={handleInstallComplete} />;
+            case "execute": return <Execute clients={clients} robloxProcesses={robloxProcesses} onExecute={handleExecute} onAttach={handleAttach} initialTabs={appState.executeTabs} initialActiveTabId={appState.activeTabId} onTabsChange={handleTabsChange} initialSelectedPids={appState.selectedPids} onSelectedPidsChange={handleSelectedPidsChange} />;
+            case "clients": return <Clients clients={clients} />;
+            case "scripts": return <ScriptHub />;
+            case "logs": return <Logs />;
+            case "settings": return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} alwaysOnTop={appState.alwaysOnTop} onAlwaysOnTopToggle={handleAlwaysOnTopToggle} sidebarPosition={appState.sidebarPosition} onSidebarPositionChange={handleSidebarPositionChange} />;
+            default: return null;
+        }
+    };
+
     const renderToasts = () => {
         const items: React.ReactNode[] = [];
 
@@ -361,6 +500,54 @@ export const App = () => {
         if (items.length === 0) return null;
         return <div className="toast-container">{items}</div>;
     };
+
+    if (loading) {
+        return (
+            <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+                <TitleBar uiMode={appState.uiMode} />
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-primary)" }}>
+                    <div style={{ color: "var(--text-tertiary)", fontSize: 13 }}>Loading...</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (appState.uiMode === "overlay") {
+        return (
+            <div style={{ height: "100vh", width: "100vw", background: "transparent", position: "relative", pointerEvents: "none" }}>
+                <FloatingSidebar
+                    activePage={appState.activePage}
+                    onPageChange={handlePageChange}
+                    position={appState.sidebarPosition}
+                    clientCount={clients.length}
+                    overlay
+                    onInteractiveEnter={handleInteractiveEnter}
+                    onInteractiveLeave={handleInteractiveLeave}
+                    openPanels={openPanels}
+                />
+                {openPanels.map((panelId) => (
+                    <FloatingPanel
+                        key={panelId}
+                        id={panelId}
+                        title={PANEL_TITLES[panelId] || panelId}
+                        x={panelPositions[panelId]?.x || 0}
+                        y={panelPositions[panelId]?.y || 0}
+                        width={panelPositions[panelId]?.width || 420}
+                        height={panelPositions[panelId]?.height || 360}
+                        onMove={handleMovePanel}
+                        onResize={handleResizePanel}
+                        onFocus={handleFocusPanel}
+                        zIndex={panelZIndices[panelId] || 100}
+                        onInteractiveEnter={handleInteractiveEnter}
+                        onInteractiveLeave={handleInteractiveLeave}
+                    >
+                        {renderPanelContent(panelId)}
+                    </FloatingPanel>
+                ))}
+                {renderToasts()}
+            </div>
+        );
+    }
 
     const renderPage = () => {
 
@@ -400,7 +587,7 @@ export const App = () => {
             case "logs":
                 return <Logs />;
             case "settings":
-                return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} alwaysOnTop={appState.alwaysOnTop} onAlwaysOnTopToggle={handleAlwaysOnTopToggle} />;
+                return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} alwaysOnTop={appState.alwaysOnTop} onAlwaysOnTopToggle={handleAlwaysOnTopToggle} sidebarPosition={appState.sidebarPosition} onSidebarPositionChange={handleSidebarPositionChange} />;
             case "about":
                 return <About serverVersion={serverVersion} />;
         }

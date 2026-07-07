@@ -175,3 +175,10 @@ button:active {
     from { opacity: 1; transform: translateY(0); }
     to { opacity: 0; transform: translateY(10px); }
 }
+
+html.overlay-mode,
+body.overlay-mode,
+body.overlay-mode body,
+body.overlay-mode #root {
+    background: transparent !important;
+}
