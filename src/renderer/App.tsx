@@ -11,7 +11,7 @@ import { Logs } from "./components/pages/Logs";
 import { Settings } from "./components/pages/Settings";
 import { About } from "./components/pages/About";
 import { Downloads } from "./components/pages/Downloads";
-import type { AppState, PageId, RobloxClient, ScriptTab, UiMode, SidebarPosition } from "@common/types";
+import type { AppState, PageId, RobloxClient, ScriptTab, UiMode, SidebarPosition, ExecutorType } from "@common/types";
 import type { ToastData } from "@common/ContextBridge";
 import "./styles/global.css";
 
@@ -23,7 +23,7 @@ type RobloxProcess = { pid: number; name: string };
 
 const DEFAULT_STATE: AppState = {
     activePage: "dashboard",
-    uiMode: "full",
+    uiMode: "compact",
     sidebarCollapsed: false,
     executeTabs: DEFAULT_TABS,
     activeTabId: "tab-0",
@@ -33,6 +33,7 @@ const DEFAULT_STATE: AppState = {
     sidebarPosition: "left",
     openPanels: [],
     panelPositions: {},
+    executor: "xeno",
 };
 
 const log = (msg: string) => console.log(`[Renegade:UI] ${msg}`);
@@ -45,8 +46,13 @@ export const App = () => {
     const [serverVersion, setServerVersion] = useState("");
     const [xenoInstalled, setXenoInstalled] = useState(false);
     const [xenoVersion, setXenoVersion] = useState("");
+    const [velocityInstalled, setVelocityInstalled] = useState(false);
+    const [velocityVersion, setVelocityVersion] = useState("");
+    const [appVersion, setAppVersion] = useState("");
     const [clients, setClients] = useState<RobloxClient[]>([]);
     const [robloxProcesses, setRobloxProcesses] = useState<RobloxProcess[]>([]);
+    const [velocityStatus, setVelocityStatus] = useState<{ available: boolean; initialized: boolean; version: string; state: string; injectedPids: number[] }>({ available: false, initialized: false, version: "unknown", state: "unknown", injectedPids: [] });
+    const [executorStatus, setExecutorStatus] = useState<{ status: string; reason: string } | null>(null);
     const [installSuccess, setInstallSuccess] = useState(false);
     const [toast, setToast] = useState<{ data: ToastData; id: number } | null>(null);
     const toastIdRef = useRef(0);
@@ -67,6 +73,24 @@ export const App = () => {
         checkStatus();
     }, []);
 
+    useEffect(() => {
+        window.ContextBridge.setExecutor(appState.executor);
+        fetchExecutorStatus(appState.executor);
+        if (appState.executor === "velocity") {
+            fetchVelocityStatus();
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!loading) {
+            if (appState.uiMode === "compact") {
+                window.ContextBridge.setWindowSize(750, 560);
+            } else if (appState.uiMode === "full") {
+                window.ContextBridge.setWindowSize(1200, 800);
+            }
+        }
+    }, [loading, appState.uiMode]);
+
     const loadState = async () => {
         try {
             const saved = await window.ContextBridge.loadAppState();
@@ -84,6 +108,7 @@ export const App = () => {
                     sidebarPosition: (saved.sidebarPosition as SidebarPosition) || prev.sidebarPosition,
                     openPanels: Array.isArray(saved.openPanels) ? saved.openPanels as string[] : prev.openPanels,
                     panelPositions: saved.panelPositions && typeof saved.panelPositions === "object" ? saved.panelPositions as Record<string, { x: number; y: number; width: number; height: number }> : prev.panelPositions,
+                    executor: (saved.executor as ExecutorType) || prev.executor,
                 }));
                 if (Array.isArray(saved.openPanels)) {
                     setOpenPanels(saved.openPanels as string[]);
@@ -109,15 +134,21 @@ export const App = () => {
     const checkStatus = async () => {
         try {
             log("Checking server status...");
-            const [status, xenoExists, xenoVer] = await Promise.all([
+            const [status, xenoExists, xenoVer, velocityExists, velocityVer, appVer] = await Promise.all([
                 window.ContextBridge.getServerStatus(),
                 window.ContextBridge.isXenoInstalled(),
                 window.ContextBridge.getXenoVersion(),
+                window.ContextBridge.isVelocityInstalled(),
+                window.ContextBridge.getVelocityVersion(),
+                window.ContextBridge.getAppVersion(),
             ]);
             log(`Status: installed=${status.installed}, running=${status.running}, serverVersion="${status.serverVersion}", healthVersion="${status.version}", initialized=${status.initialized}, clientCount=${status.clientCount}, mode=${status.mode}`);
             setServerInstalled(status.installed);
             setXenoInstalled(xenoExists);
             setXenoVersion(xenoVer);
+            setVelocityInstalled(velocityExists);
+            setVelocityVersion(velocityVer);
+            setAppVersion(appVer);
 
             if (status.installed && status.running) {
                 setServerRunning(true);
@@ -172,6 +203,24 @@ export const App = () => {
         }
     };
 
+    const fetchVelocityStatus = async () => {
+        try {
+            const status = await window.ContextBridge.getVelocityStatus();
+            setVelocityStatus(status);
+        } catch {
+            setVelocityStatus({ available: false, initialized: false, version: "unknown", state: "unknown", injectedPids: [] });
+        }
+    };
+
+    const fetchExecutorStatus = async (exec: ExecutorType) => {
+        try {
+            const status = await window.ContextBridge.getExecutorStatus(exec);
+            setExecutorStatus(status);
+        } catch {
+            setExecutorStatus(null);
+        }
+    };
+
     const pollHealth = useCallback(async () => {
         try {
             const h = await window.ContextBridge.health();
@@ -182,13 +231,16 @@ export const App = () => {
                 }
                 loadClients();
                 detectRobloxProcesses();
+                if (appState.executor === "velocity") {
+                    fetchVelocityStatus();
+                }
             } else if (serverRunning) {
                 log("Server went offline");
                 setServerRunning(false);
                 setClients([]);
             }
         } catch { /* ignore */ }
-    }, [serverRunning]);
+    }, [serverRunning, appState.executor]);
 
     const startPolling = useCallback(() => {
         if (pollRef.current) clearInterval(pollRef.current);
@@ -442,6 +494,15 @@ export const App = () => {
         saveState({ sidebarPosition: pos });
     }, [saveState]);
 
+    const handleExecutorChange = useCallback((executor: ExecutorType) => {
+        saveState({ executor });
+        window.ContextBridge.setExecutor(executor);
+        fetchExecutorStatus(executor);
+        if (executor === "velocity") {
+            fetchVelocityStatus();
+        }
+    }, [saveState]);
+
     const PANEL_TITLES: Record<string, string> = {
         dashboard: "Dashboard", downloads: "Downloads", execute: "Execute",
         clients: "Clients", scripts: "Script Hub", logs: "Logs", settings: "Settings",
@@ -459,13 +520,13 @@ export const App = () => {
 
     const renderPanelContent = (panelId: string) => {
         switch (panelId) {
-            case "dashboard": return <Dashboard serverRunning={serverRunning} serverVersion={serverVersion} clientCount={clients.length} onNavigate={handlePageChange} onAttach={handleAttach} />;
-            case "downloads": return <Downloads serverInstalled={serverInstalled} serverRunning={serverRunning} serverVersion={serverVersion} xenoInstalled={xenoInstalled} xenoVersion={xenoVersion} onReady={handleDownloadsReady} onInstallComplete={handleInstallComplete} />;
-            case "execute": return <Execute clients={clients} robloxProcesses={robloxProcesses} onExecute={handleExecute} onAttach={handleAttach} initialTabs={appState.executeTabs} initialActiveTabId={appState.activeTabId} onTabsChange={handleTabsChange} initialSelectedPids={appState.selectedPids} onSelectedPidsChange={handleSelectedPidsChange} />;
+            case "dashboard": return <Dashboard serverRunning={serverRunning} serverVersion={serverVersion} xenoVersion={xenoVersion} appVersion={appVersion} clientCount={clients.length} onNavigate={handlePageChange} executor={appState.executor} velocityStatus={velocityStatus} />;
+            case "downloads": return <Downloads serverInstalled={serverInstalled} serverRunning={serverRunning} serverVersion={serverVersion} xenoInstalled={xenoInstalled} xenoVersion={xenoVersion} velocityInstalled={velocityInstalled} velocityVersion={velocityVersion} onReady={handleDownloadsReady} onInstallComplete={handleInstallComplete} />;
+            case "execute": return <Execute clients={clients} robloxProcesses={robloxProcesses} onExecute={handleExecute} onAttach={handleAttach} initialTabs={appState.executeTabs} initialActiveTabId={appState.activeTabId} onTabsChange={handleTabsChange} initialSelectedPids={appState.selectedPids} onSelectedPidsChange={handleSelectedPidsChange} executor={appState.executor} velocityStatus={velocityStatus} _fetchVelocityStatus={fetchVelocityStatus} executorStatus={executorStatus} />;
             case "clients": return <Clients clients={clients} />;
             case "scripts": return <ScriptHub />;
             case "logs": return <Logs />;
-            case "settings": return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} alwaysOnTop={appState.alwaysOnTop} onAlwaysOnTopToggle={handleAlwaysOnTopToggle} sidebarPosition={appState.sidebarPosition} onSidebarPositionChange={handleSidebarPositionChange} />;
+            case "settings": return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} alwaysOnTop={appState.alwaysOnTop} onAlwaysOnTopToggle={handleAlwaysOnTopToggle} sidebarPosition={appState.sidebarPosition} onSidebarPositionChange={handleSidebarPositionChange} executor={appState.executor} onExecutorChange={handleExecutorChange} />;
             default: return null;
         }
     };
@@ -553,7 +614,7 @@ export const App = () => {
 
         switch (appState.activePage) {
             case "dashboard":
-                return <Dashboard serverRunning={serverRunning} serverVersion={serverVersion} clientCount={clients.length} onNavigate={handlePageChange} onAttach={handleAttach} />;
+                return <Dashboard serverRunning={serverRunning} serverVersion={serverVersion} xenoVersion={xenoVersion} appVersion={appVersion} clientCount={clients.length} onNavigate={handlePageChange} executor={appState.executor} velocityStatus={velocityStatus} />;
             case "downloads":
                 return (
                     <Downloads
@@ -562,6 +623,8 @@ export const App = () => {
                         serverVersion={serverVersion}
                         xenoInstalled={xenoInstalled}
                         xenoVersion={xenoVersion}
+                        velocityInstalled={velocityInstalled}
+                        velocityVersion={velocityVersion}
                         onReady={handleDownloadsReady}
                         onInstallComplete={handleInstallComplete}
                     />
@@ -578,6 +641,10 @@ export const App = () => {
                         onTabsChange={handleTabsChange}
                         initialSelectedPids={appState.selectedPids}
                         onSelectedPidsChange={handleSelectedPidsChange}
+                        executor={appState.executor}
+                        velocityStatus={velocityStatus}
+                        _fetchVelocityStatus={fetchVelocityStatus}
+                        executorStatus={executorStatus}
                     />
                 );
             case "clients":
@@ -587,7 +654,7 @@ export const App = () => {
             case "logs":
                 return <Logs />;
             case "settings":
-                return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} alwaysOnTop={appState.alwaysOnTop} onAlwaysOnTopToggle={handleAlwaysOnTopToggle} sidebarPosition={appState.sidebarPosition} onSidebarPositionChange={handleSidebarPositionChange} />;
+                return <Settings uiMode={appState.uiMode} onUiModeChange={handleUiModeChange} autoInject={appState.autoInject} onAutoInjectToggle={handleAutoInjectToggle} alwaysOnTop={appState.alwaysOnTop} onAlwaysOnTopToggle={handleAlwaysOnTopToggle} sidebarPosition={appState.sidebarPosition} onSidebarPositionChange={handleSidebarPositionChange} executor={appState.executor} onExecutorChange={handleExecutorChange} />;
             case "about":
                 return <About serverVersion={serverVersion} />;
         }
@@ -617,6 +684,8 @@ export const App = () => {
                         clientCount={clients.length}
                         collapsed={appState.sidebarCollapsed}
                         onToggleCollapse={handleToggleCollapse}
+                        executor={appState.executor}
+                        velocityStatus={velocityStatus}
                     />
                     <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
                         {renderPage()}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RobloxClient, SavedScript, ScriptTab } from "@common/types";
+import type { FavoriteScript, RobloxClient, SavedScript, ScriptTab, ExecutorType } from "@common/types";
 import { CodeEditor } from "../ui/CodeEditor";
 import "./Execute.css";
 
@@ -17,9 +17,13 @@ interface Props {
     onTabsChange: (tabs: ScriptTab[], activeId: string) => void;
     initialSelectedPids: number[];
     onSelectedPidsChange: (pids: number[]) => void;
+    executor: ExecutorType;
+    velocityStatus: { available: boolean; initialized: boolean; version: string; state: string; injectedPids: number[] };
+    _fetchVelocityStatus?: () => Promise<void>;
+    executorStatus: { status: string; reason: string } | null;
 }
 
-export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initialTabs, initialActiveTabId, onTabsChange, initialSelectedPids, onSelectedPidsChange }: Props) => {
+export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initialTabs, initialActiveTabId, onTabsChange, initialSelectedPids, onSelectedPidsChange, executor, velocityStatus, executorStatus }: Props) => {
     const [tabs, setTabs] = useState<ScriptTab[]>(initialTabs);
     const [activeTabId, setActiveTabId] = useState(initialActiveTabId);
     const [selectedPids, setSelectedPids] = useState<Set<number>>(() => new Set(initialSelectedPids));
@@ -27,6 +31,10 @@ export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initial
     const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
     const renameInputRef = useRef<HTMLInputElement>(null);
     const contextMenuRef = useRef<HTMLDivElement>(null);
+
+    const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(["processes"]));
+    const [localScripts, setLocalScripts] = useState<SavedScript[]>([]);
+    const [favorites, setFavorites] = useState<FavoriteScript[]>([]);
 
     const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
@@ -55,6 +63,40 @@ export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initial
         document.addEventListener("mousedown", handleClick);
         return () => document.removeEventListener("mousedown", handleClick);
     }, [contextMenu]);
+
+    useEffect(() => {
+        if (clients.length === 1) {
+            const pid = clients[0][0];
+            setSelectedPids((prev) => {
+                if (prev.size === 0 || (prev.size === 1 && prev.has(pid))) return prev;
+                return new Set([pid]);
+            });
+        }
+    }, [clients]);
+
+    useEffect(() => {
+        loadPanelScripts();
+    }, []);
+
+    const loadPanelScripts = async () => {
+        try {
+            const [scripts, favs] = await Promise.all([
+                window.ContextBridge.loadScripts(),
+                window.ContextBridge.loadFavorites(),
+            ]);
+            setLocalScripts(scripts);
+            setFavorites(favs as FavoriteScript[]);
+        } catch { /* ignore */ }
+    };
+
+    const toggleSection = (section: string) => {
+        setOpenSections((prev) => {
+            const next = new Set(prev);
+            if (next.has(section)) next.delete(section);
+            else next.add(section);
+            return next;
+        });
+    };
 
     const updateTabContent = useCallback((id: string, content: string) => {
         setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, content } : t)));
@@ -119,51 +161,30 @@ export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initial
     }, []);
 
     const handleExecute = useCallback(() => {
-        if (selectedPids.size === 0 || !activeTab) return;
-        onExecute(activeTab.content, Array.from(selectedPids));
-    }, [activeTab, selectedPids, onExecute]);
+        if (!activeTab) return;
+        if (executor === "velocity") {
+            onExecute(activeTab.content, []);
+        } else {
+            if (selectedPids.size === 0) return;
+            onExecute(activeTab.content, Array.from(selectedPids));
+        }
+    }, [activeTab, selectedPids, onExecute, executor]);
 
-    const [showOpen, setShowOpen] = useState(false);
-    const [savedScripts, setSavedScripts] = useState<SavedScript[]>([]);
-    const openRef = useRef<HTMLDivElement>(null);
+    const openScriptInTab = (name: string, content: string) => {
+        const id = `tab-${tabCounter++}`;
+        setTabs((prev) => [...prev, { id, name, content }]);
+        setActiveTabId(id);
+    };
+
+    const executeScript = (script: string) => {
+        const event = new CustomEvent("renegade:executeScript", { detail: { script } });
+        window.dispatchEvent(event);
+    };
 
     const handleSave = useCallback(async () => {
         if (!activeTab) return;
         await window.ContextBridge.saveScript(activeTab.name, activeTab.content);
     }, [activeTab]);
-
-    const handleOpenList = useCallback(async () => {
-        const list = await window.ContextBridge.loadScripts();
-        setSavedScripts(list);
-        setShowOpen(true);
-    }, []);
-
-    const handleOpenScript = useCallback((s: SavedScript) => {
-        const id = `tab-${tabCounter++}`;
-        setTabs((prev) => [...prev, { id, name: s.name, content: s.content }]);
-        setActiveTabId(id);
-        setShowOpen(false);
-    }, []);
-
-    useEffect(() => {
-        if (!showOpen) return;
-        const handleClick = (e: MouseEvent) => {
-            if (openRef.current && !openRef.current.contains(e.target as Node)) setShowOpen(false);
-        };
-        document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
-    }, [showOpen]);
-
-    useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-                e.preventDefault();
-                handleSave();
-            }
-        };
-        window.addEventListener("keydown", handler);
-        return () => window.removeEventListener("keydown", handler);
-    }, [handleSave]);
 
     return (
         <div className="execute">
@@ -201,38 +222,18 @@ export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initial
                             )}
                         </div>
                     ))}
+                </div>
+                <div className="execute-tabs-actions">
                     <button className="execute-tab-add" onClick={addTab} title="New tab">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19" />
                             <line x1="5" y1="12" x2="19" y2="12" />
                         </svg>
                     </button>
-                </div>
-                <div className="execute-tabs-actions">
                     <button className="execute-toolbar-btn" onClick={handleSave} title="Save (Ctrl+S)">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
                         Save
                     </button>
-                    <div className="execute-toolbar-open" ref={openRef}>
-                        <button className="execute-toolbar-btn" onClick={handleOpenList} title="Open saved script">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>
-                            Open
-                        </button>
-                        {showOpen && (
-                            <div className="execute-open-dropdown">
-                                {savedScripts.length === 0 ? (
-                                    <div className="execute-open-empty">No saved scripts</div>
-                                ) : (
-                                    savedScripts.map((s) => (
-                                        <button key={s.name} className="execute-open-item" onClick={() => handleOpenScript(s)}>
-                                            <span className="execute-open-name">{s.name}</span>
-                                            <span className="execute-open-date">{new Date(s.saved).toLocaleDateString()}</span>
-                                        </button>
-                                    ))
-                                )}
-                            </div>
-                        )}
-                    </div>
                     <button className="execute-toolbar-btn" onClick={() => navigator.clipboard?.writeText(activeTab?.content ?? "")}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
                         Copy
@@ -241,7 +242,7 @@ export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initial
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
                         Paste
                     </button>
-                    <button className="execute-toolbar-btn run" onClick={handleExecute} disabled={selectedPids.size === 0}>
+                    <button className="execute-toolbar-btn run" onClick={handleExecute} disabled={executor !== "velocity" && selectedPids.size === 0}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                         Execute
                     </button>
@@ -265,6 +266,21 @@ export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initial
                 </div>
             )}
 
+            {executorStatus && (
+                <div className={`execute-status-banner status-${executorStatus.status}`}>
+                    <div className="execute-status-icon">
+                        {executorStatus.status === "stable" ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                        ) : executorStatus.status === "unstable" ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                        ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+                        )}
+                    </div>
+                    <span className="execute-status-text">{executorStatus.reason}</span>
+                </div>
+            )}
+
             <div className="execute-body">
                 <div className="execute-editor">
                     {activeTab && (
@@ -276,45 +292,146 @@ export const Execute = ({ clients, robloxProcesses, onExecute, onAttach, initial
                     )}
                 </div>
                 <div className="execute-panel">
-                    <div className="execute-panel-header">
-                        {clients.length > 0 ? "Injected" : "Processes"}
-                    </div>
-                    <div className="execute-panel-list">
-                        {clients.length > 0 ? (
-                            clients.map((c) => (
-                                <div
-                                    key={c[0]}
-                                    className={`execute-client ${selectedPids.has(c[0]) ? "selected" : ""}`}
-                                    onClick={() => togglePid(c[0])}
-                                >
-                                    <div className="execute-client-check">
-                                        {selectedPids.has(c[0]) && (
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                                        )}
-                                    </div>
-                                    <div className="execute-client-info">
-                                        <span className="execute-client-name">{c[1]}</span>
-                                        <span className="execute-client-pid">PID {c[0]} — Injected</span>
-                                    </div>
-                                </div>
-                            ))
-                        ) : robloxProcesses.length > 0 ? (
-                            robloxProcesses.map((p) => (
-                                <div key={p.pid} className="execute-client detected">
-                                    <div className="execute-client-info">
-                                        <span className="execute-client-name">{p.name}</span>
-                                        <span className="execute-client-pid">PID {p.pid} — Not injected</span>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="execute-empty">
-                                No Roblox processes found
+                    <div className="execute-panel-scroll">
+                        {executor === "velocity" && (
+                            <div className="velocity-status-banner">
+                                <div className="velocity-status-dot" data-state={velocityStatus.state} />
+                                <span className="velocity-status-text">
+                                    Velocity {velocityStatus.version || "?"} — {velocityStatus.state}
+                                </span>
+                                {velocityStatus.injectedPids.length > 0 && (
+                                    <span className="velocity-pid-count">{velocityStatus.injectedPids.length} injected</span>
+                                )}
                             </div>
                         )}
+
+                        <div className="execute-section">
+                            <button className="execute-section-header" onClick={() => toggleSection("processes")}>
+                                <svg className={`execute-section-arrow ${openSections.has("processes") ? "open" : ""}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+                                {executor === "velocity" ? "Processes" : "Processes"}
+                                <span className="execute-section-count">{clients.length || robloxProcesses.length}</span>
+                            </button>
+                            {openSections.has("processes") && (
+                                <div className="execute-section-content">
+                                    {executor === "velocity" ? (
+                                        <>
+                                            {robloxProcesses.length > 0 ? (
+                                                robloxProcesses.map((p) => {
+                                                    const isInjected = velocityStatus.injectedPids.includes(p.pid);
+                                                    return (
+                                                        <div key={p.pid} className={`execute-client ${isInjected ? "selected" : ""}`}>
+                                                            <div className="execute-client-check">
+                                                                {isInjected && (
+                                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                                )}
+                                                            </div>
+                                                            <div className="execute-client-info">
+                                                                <span className="execute-client-name">{p.name}</span>
+                                                                <span className="execute-client-pid">PID {p.pid} — {isInjected ? "Injected" : "Not injected"}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="execute-empty">No Roblox processes found</div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {clients.length > 0 ? (
+                                                clients.map((c) => (
+                                                    <div
+                                                        key={c[0]}
+                                                        className={`execute-client ${selectedPids.has(c[0]) ? "selected" : ""}`}
+                                                        onClick={() => togglePid(c[0])}
+                                                    >
+                                                        <div className="execute-client-check">
+                                                            {selectedPids.has(c[0]) && (
+                                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                            )}
+                                                        </div>
+                                                        <div className="execute-client-info">
+                                                            <span className="execute-client-name">{c[1]}</span>
+                                                            <span className="execute-client-pid">PID {c[0]} — Injected</span>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : robloxProcesses.length > 0 ? (
+                                                robloxProcesses.map((p) => (
+                                                    <div key={p.pid} className="execute-client detected">
+                                                        <div className="execute-client-info">
+                                                            <span className="execute-client-name">{p.name}</span>
+                                                            <span className="execute-client-pid">PID {p.pid} — Not injected</span>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="execute-empty">No Roblox processes found</div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="execute-section">
+                            <button className="execute-section-header" onClick={() => toggleSection("local")}>
+                                <svg className={`execute-section-arrow ${openSections.has("local") ? "open" : ""}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+                                Local
+                                <span className="execute-section-count">{localScripts.length}</span>
+                            </button>
+                            {openSections.has("local") && (
+                                <div className="execute-section-content">
+                                    {localScripts.length === 0 ? (
+                                        <div className="execute-empty">No saved scripts</div>
+                                    ) : (
+                                        localScripts.map((s) => (
+                                            <div key={s.name} className="execute-script-item">
+                                                <div className="execute-script-info" onClick={() => openScriptInTab(s.name, s.content)}>
+                                                    <span className="execute-script-name">{s.name}</span>
+                                                    <span className="execute-script-date">{new Date(s.saved).toLocaleDateString()}</span>
+                                                </div>
+                                                <button className="execute-script-exec" onClick={() => executeScript(s.content)} title="Execute">
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="execute-section">
+                            <button className="execute-section-header" onClick={() => toggleSection("favorites")}>
+                                <svg className={`execute-section-arrow ${openSections.has("favorites") ? "open" : ""}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+                                Favorites
+                                <span className="execute-section-count">{favorites.length}</span>
+                            </button>
+                            {openSections.has("favorites") && (
+                                <div className="execute-section-content">
+                                    {favorites.length === 0 ? (
+                                        <div className="execute-empty">No favorites yet</div>
+                                    ) : (
+                                        favorites.map((f) => (
+                                            <div key={f.id} className="execute-script-item">
+                                                <div className="execute-script-info" onClick={() => openScriptInTab(f.title, f.script)}>
+                                                    <span className="execute-script-name">{f.title}</span>
+                                                    <span className="execute-script-date">{f.game || "Universal"}</span>
+                                                </div>
+                                                <button className="execute-script-exec" onClick={() => executeScript(f.script)} title="Execute">
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div className="execute-panel-actions">
-                        <button className="execute-attach-btn" onClick={onAttach}>Inject</button>
+                        <button className={`execute-attach-btn ${executor === "velocity" ? "velocity" : ""}`} onClick={onAttach}>
+                            {executor === "velocity" ? "Inject (Velocity)" : "Inject"}
+                        </button>
                     </div>
                 </div>
             </div>

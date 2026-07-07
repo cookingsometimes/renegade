@@ -1,4 +1,4 @@
-import type { UiMode, SidebarPosition } from "@common/types";
+import type { UiMode, SidebarPosition, ExecutorType } from "@common/types";
 import "./Settings.css";
 
 interface Props {
@@ -10,13 +10,49 @@ interface Props {
     onAlwaysOnTopToggle: () => void;
     sidebarPosition: SidebarPosition;
     onSidebarPositionChange: (pos: SidebarPosition) => void;
+    executor: ExecutorType;
+    onExecutorChange: (executor: ExecutorType) => void;
 }
 
-export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggle, alwaysOnTop, onAlwaysOnTopToggle, sidebarPosition, onSidebarPositionChange }: Props) => {
+export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggle, alwaysOnTop, onAlwaysOnTopToggle, sidebarPosition, onSidebarPositionChange, executor, onExecutorChange }: Props) => {
     return (
         <div className="settings">
             <div className="page-header">
                 <h2 className="page-title">Settings</h2>
+            </div>
+
+            <div className="settings-section">
+                <div className="settings-section-label">Executor</div>
+                <div className="settings-row">
+                    <div className="settings-row-info">
+                        <span className="settings-row-title">Executor DLL</span>
+                        <span className="settings-row-desc">Select which executor backend to use. Velocity requires admin privileges.</span>
+                    </div>
+                    <div className="settings-mode-switch">
+                        <button
+                            className={`settings-mode-btn ${executor === "xeno" ? "active" : ""}`}
+                            onClick={() => onExecutorChange("xeno")}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                <path d="M2 17l10 5 10-5" />
+                                <path d="M2 12l10 5 10-5" />
+                            </svg>
+                            Xeno
+                            <span className="settings-tag settings-tag-stable">Stable</span>
+                        </button>
+                        <button
+                            className={`settings-mode-btn ${executor === "velocity" ? "active" : ""}`}
+                            onClick={() => onExecutorChange("velocity")}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                            </svg>
+                            Velocity
+                            <span className="settings-tag settings-tag-experimental">Exp</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div className="settings-section">
@@ -126,7 +162,7 @@ export const Settings = ({ uiMode, onUiModeChange, autoInject, onAutoInjectToggl
                 <div className="settings-row">
                     <div className="settings-row-info">
                         <span className="settings-row-title">Renegade</span>
-                        <span className="settings-row-desc">Custom UI wrapper for Xeno executor</span>
+                        <span className="settings-row-desc">Custom UI wrapper for Xeno and Velocity executors</span>
                     </div>
                 </div>
             </div>

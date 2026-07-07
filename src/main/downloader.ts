@@ -1,7 +1,8 @@
 import { app } from "electron";
 import { join } from "path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, copyFileSync, createWriteStream } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, copyFileSync, createWriteStream, rmSync } from "fs";
 import { execSync } from "child_process";
+import { createDecipheriv, pbkdf2Sync } from "crypto";
 
 import https from "https";
 import http from "http";
@@ -17,6 +18,10 @@ export const XENO_DIR = join(DATA_DIR, "xeno");
 export const XENO_VERSIONS_DIR = join(DATA_DIR, "xeno-versions");
 export const SUMI_SERVER_API = "https://sumi-api.netlify.app/api/v0/renegade/server/download";
 export const SUMI_XENO_API = "https://sumi-api.netlify.app/api/v0/rblx/executors/dl/xeno";
+export const VELOCITY_DIR = join(DATA_DIR, "velocity");
+export const VELOCITY_VERSION_FILE = join(VELOCITY_DIR, "current_version.txt");
+export const VELOCITY_VERSION_URL = "https://realvelocity.xyz/assets/current_version.txt";
+export const VELOCITY_DOWNLOAD_URL = "https://realvelocity.xyz/assets/download_links.json";
 
 let safeSend: (channel: string, ...args: unknown[]) => void = () => {};
 let serverRequest: (path: string, method?: string, body?: string) => Promise<Record<string, unknown>> = async () => ({});
@@ -272,4 +277,108 @@ export async function checkXenoInstalled(): Promise<boolean> {
     } catch {
         return isXenoInstalled();
     }
+}
+
+export function isVelocityInstalled(): boolean {
+    if (!existsSync(VELOCITY_DIR)) return false;
+    return existsSync(join(VELOCITY_DIR, "Decompiler.exe")) && existsSync(join(VELOCITY_DIR, "erto3e4rortoergn.exe"));
+}
+
+export function getVelocityVersionFile(): string {
+    if (!existsSync(VELOCITY_VERSION_FILE)) return "";
+    try { return readFileSync(VELOCITY_VERSION_FILE, "utf-8").trim(); } catch { return ""; }
+}
+
+function aesGcmDecrypt(encryptedBase64: string, password: string): string {
+    const data = Buffer.from(encryptedBase64, "base64");
+    if (data.length < 44) throw new Error("Invalid ciphertext: too short");
+    const salt = data.subarray(0, 16);
+    const nonce = data.subarray(16, 28);
+    const tag = data.subarray(data.length - 16);
+    const ciphertext = data.subarray(28, data.length - 16);
+    const key = pbkdf2Sync(password, salt, 100000, 32, "sha256");
+    const decipher = createDecipheriv("aes-256-gcm", key, nonce);
+    decipher.setAuthTag(tag);
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return decrypted.toString("utf-8");
+}
+
+function fetchText(url: string, timeoutMs = 15000): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const parsed = new URL(url);
+        const mod = parsed.protocol === "https:" ? https : http;
+        const req = mod.get(url, { headers: { "User-Agent": "Renegade/2.0" }, timeout: timeoutMs }, (res) => {
+            if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                fetchText(res.headers.location, timeoutMs).then(resolve, reject);
+                return;
+            }
+            if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+                reject(new Error(`HTTP ${res.statusCode}`));
+                return;
+            }
+            let body = "";
+            res.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+            res.on("end", () => resolve(body));
+        });
+        req.on("error", reject);
+        req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
+    });
+}
+
+export async function downloadVelocity(): Promise<{ success: boolean; version?: string; error?: string }> {
+    const MAX_RETRIES = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            logger.info(SRC, `Starting Velocity download attempt ${attempt}/${MAX_RETRIES}`);
+            safeSend("app:velocityRetry", { attempt, max: MAX_RETRIES });
+
+            const linksJson = await fetchText(VELOCITY_DOWNLOAD_URL);
+            let parsed: { L1?: string; L2?: string; question?: string };
+            try { parsed = JSON.parse(linksJson); } catch { throw new Error("Invalid download_links.json"); }
+            if (!parsed.L1 || !parsed.L2 || !parsed.question) throw new Error("Missing L1/L2/question in JSON");
+
+            const remoteVersion = await fetchText(VELOCITY_VERSION_URL).catch(() => "");
+            const localVersion = getVelocityVersionFile();
+
+            if (remoteVersion && remoteVersion === localVersion && isVelocityInstalled()) {
+                logger.info(SRC, `Velocity already up to date: ${remoteVersion}`);
+                return { success: true, version: remoteVersion };
+            }
+
+            mkdirSync(VELOCITY_DIR, { recursive: true });
+
+            safeSend("app:velocityProgress", { phase: "decrypt", bytesReceived: 0, totalBytes: 0 });
+
+            const url1 = aesGcmDecrypt(parsed.L1, parsed.question);
+            const url2 = aesGcmDecrypt(parsed.L2, parsed.question);
+            logger.info(SRC, `Decrypted download URLs successfully`);
+
+            const decompilerPath = join(VELOCITY_DIR, "Decompiler.exe");
+            const injectorPath = join(VELOCITY_DIR, "erto3e4rortoergn.exe");
+
+            if (existsSync(decompilerPath)) rmSync(decompilerPath, { force: true });
+            if (existsSync(injectorPath)) rmSync(injectorPath, { force: true });
+
+            safeSend("app:velocityProgress", { phase: "decompiler", bytesReceived: 0, totalBytes: 0 });
+            await downloadFile(url1, decompilerPath, (p) => safeSend("app:velocityProgress", { phase: "decompiler", ...p }));
+
+            safeSend("app:velocityProgress", { phase: "injector", bytesReceived: 0, totalBytes: 0 });
+            await downloadFile(url2, injectorPath, (p) => safeSend("app:velocityProgress", { phase: "injector", ...p }));
+
+            writeFileSync(VELOCITY_VERSION_FILE, remoteVersion || "unknown", "utf-8");
+            logger.info(SRC, `Velocity download successful: version ${remoteVersion || "unknown"}`);
+            return { success: true, version: remoteVersion || "unknown" };
+        } catch (e) {
+            lastError = e as Error;
+            logger.error(SRC, `Velocity attempt ${attempt} failed: ${lastError.message}`, lastError);
+            if (attempt < MAX_RETRIES) {
+                safeSend("app:velocityRetry", { attempt, max: MAX_RETRIES, retrying: true, error: lastError.message });
+                await new Promise((r) => setTimeout(r, 3000 * attempt));
+            }
+        }
+    }
+    logger.error(SRC, `Velocity download failed after ${MAX_RETRIES} attempts: ${lastError?.message ?? "Unknown"}`);
+    return { success: false, error: lastError?.message ?? "Unknown error" };
 }

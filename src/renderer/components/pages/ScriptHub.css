@@ -4,6 +4,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    animation: fadeIn 350ms ease forwards;
 }
 
 .page-header {
@@ -12,6 +13,7 @@
     gap: 16px;
     margin-bottom: 20px;
     flex-shrink: 0;
+    animation: fadeIn 200ms ease backwards;
 }
 
 .page-title {
@@ -38,6 +40,7 @@
     font-weight: 600;
     color: var(--text-tertiary);
     background: transparent;
+    transition: background 180ms ease, color 180ms ease;
 }
 
 .scripts-tab-btn:hover {
@@ -83,11 +86,13 @@
     border: 1px solid var(--border);
     color: var(--text-primary);
     font-size: 13px;
+    transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .scripts-input:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .scripts-save-btn {
@@ -98,14 +103,17 @@
     color: white;
     font-size: 12px;
     font-weight: 600;
+    transition: background 180ms ease, box-shadow 180ms ease;
 }
 
 .scripts-save-btn:disabled {
     opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .scripts-save-btn:hover:not(:disabled) {
     background: var(--accent-hover);
+    box-shadow: 0 2px 12px rgba(124, 92, 255, 0.3);
 }
 
 .scripts-list {
@@ -130,11 +138,12 @@
     padding: 10px 12px;
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: background var(--transition-fast);
+    transition: background 150ms ease, padding-left 180ms ease;
 }
 
 .script-item:hover {
     background: var(--bg-hover);
+    padding-left: 16px;
 }
 
 .script-item.selected {
@@ -171,7 +180,7 @@
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
     flex-shrink: 0;
-    transition: background var(--transition-fast), color var(--transition-fast);
+    transition: background 150ms ease, color 150ms ease;
 }
 
 .script-item-delete:hover {
@@ -196,7 +205,7 @@
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
     flex-shrink: 0;
-    transition: background var(--transition-fast), color var(--transition-fast);
+    transition: background 150ms ease, color 150ms ease;
 }
 
 .script-item-open:hover {
@@ -248,15 +257,22 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     flex-shrink: 0;
+    transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .scripts-search-bar:focus-within {
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .scripts-search-icon {
     color: var(--text-tertiary);
     flex-shrink: 0;
+    transition: color 180ms ease;
+}
+
+.scripts-search-bar:focus-within .scripts-search-icon {
+    color: var(--accent);
 }
 
 .scripts-search-input {
@@ -285,6 +301,7 @@
     color: var(--text-tertiary);
     flex-shrink: 0;
     background: transparent;
+    transition: background 150ms ease, color 150ms ease;
 }
 
 .scripts-search-clear:hover {
@@ -314,8 +331,19 @@
     padding: 10px;
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: background var(--transition-fast);
+    transition: background 150ms ease, padding-left 180ms ease;
+    align-items: flex-start;
+    animation: fadeIn 200ms ease backwards;
 }
+
+.script-result-item:nth-child(1) { animation-delay: 0ms; }
+.script-result-item:nth-child(2) { animation-delay: 30ms; }
+.script-result-item:nth-child(3) { animation-delay: 60ms; }
+.script-result-item:nth-child(4) { animation-delay: 90ms; }
+.script-result-item:nth-child(5) { animation-delay: 120ms; }
+.script-result-item:nth-child(6) { animation-delay: 150ms; }
+.script-result-item:nth-child(7) { animation-delay: 180ms; }
+.script-result-item:nth-child(8) { animation-delay: 210ms; }
 
 .script-result-item:hover {
     background: var(--bg-hover);
@@ -323,6 +351,34 @@
 
 .script-result-item.selected {
     background: var(--accent-subtle);
+}
+
+.script-result-fav {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    background: transparent;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 150ms ease, color 150ms ease, background 150ms ease;
+}
+
+.script-result-item:hover .script-result-fav {
+    opacity: 1;
+}
+
+.script-result-fav:hover {
+    background: var(--bg-tertiary);
+    color: #fbbf24;
+}
+
+.script-result-fav.active {
+    opacity: 1;
+    color: #fbbf24;
 }
 
 .script-result-thumb {
@@ -421,6 +477,7 @@
     font-size: 12px;
     font-weight: 500;
     margin: 4px 0;
+    transition: background 150ms ease, color 150ms ease;
 }
 
 .scripts-load-more:hover {
@@ -442,6 +499,7 @@
     border: 1px solid var(--border);
     background: var(--bg-secondary);
     overflow: hidden;
+    animation: fadeIn 200ms ease backwards;
 }
 
 .scripts-preview-header {
@@ -462,10 +520,33 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
 }
 
 .scripts-preview-verified {
     flex-shrink: 0;
+}
+
+.scripts-preview-fav {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    background: transparent;
+    flex-shrink: 0;
+    transition: color 150ms ease, background 150ms ease;
+}
+
+.scripts-preview-fav:hover {
+    background: var(--bg-tertiary);
+    color: #fbbf24;
+}
+
+.scripts-preview-fav.active {
+    color: #fbbf24;
 }
 
 .scripts-preview-game {
@@ -499,6 +580,7 @@
     font-weight: 600;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
+    transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 .scripts-action-btn:hover:not(:disabled) {
@@ -524,10 +606,12 @@
 .scripts-action-btn.execute {
     background: var(--accent);
     color: white;
+    transition: background 180ms ease, box-shadow 180ms ease;
 }
 
 .scripts-action-btn.execute:hover:not(:disabled) {
     background: var(--accent-hover);
+    box-shadow: 0 2px 12px rgba(124, 92, 255, 0.3);
 }
 
 .scripts-preview-code {
@@ -583,16 +667,11 @@
     font-size: 12px;
     font-weight: 600;
     z-index: 9999;
-    box-shadow: var(--shadow-lg);
-    animation: toastIn 0.2s ease, toastOut 0.2s ease 1.8s forwards;
+    box-shadow: var(--shadow-lg), 0 0 20px rgba(124, 92, 255, 0.25);
+    animation: fadeIn 350ms ease, fadeOut 250ms ease 1.75s forwards;
 }
 
-@keyframes toastIn {
-    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-    to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
-@keyframes toastOut {
+@keyframes fadeOut {
     from { opacity: 1; }
     to { opacity: 0; }
 }

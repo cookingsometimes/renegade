@@ -8,14 +8,18 @@ import {
     initDownloader,
     downloadXeno,
     downloadServer,
+    downloadVelocity,
     getServerVersionFile,
     isServerInstalled,
+    isVelocityInstalled,
+    getVelocityVersionFile,
     getXenoVersion,
     checkXenoInstalled,
     XENO_DIR,
     SERVER_DIR,
     SERVER_EXE,
     DATA_DIR,
+    VELOCITY_DIR,
 } from "./downloader";
 import {
     initUpdater,
@@ -33,6 +37,7 @@ let serverCrashCount = 0;
 let serverRestartTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_SERVER_CRASHES = 3;
 const SERVER_PORT = 3420;
+let currentExecutor: "xeno" | "velocity" = "xeno";
 
 const SRC = "Main";
 
@@ -148,67 +153,93 @@ async function startServer(): Promise<{ success: boolean; error?: string }> {
     logger.info(SRC, "Spawning server...");
     mkdirSync(SERVER_DIR, { recursive: true });
 
-    serverProcess = spawn(exe, [
+    const args = [
         "--port", String(SERVER_PORT),
         "--data-dir", DATA_DIR,
         "--xeno-dir", join(DATA_DIR, "xeno"),
         "--versions-dir", join(DATA_DIR, "xeno-versions"),
         "--log-dir", join(DATA_DIR, "logs"),
-    ], {
-        cwd: SERVER_DIR,
-        stdio: "pipe",
-        windowsHide: true,
-    });
+    ];
+    if (currentExecutor === "velocity") {
+        args.push("--velocity-dir", join(DATA_DIR, "velocity"));
+    }
 
-    serverProcess.stdout?.on("data", (d: Buffer) => {
-        const m = d.toString().trim();
-        if (m) logger.info("Server", m);
-    });
-    serverProcess.stderr?.on("data", (d: Buffer) => {
-        const m = d.toString().trim();
-        if (m) logger.warn("Server", m);
-    });
-    serverProcess.on("exit", (code) => {
-        logger.info(SRC, `Server exitted (code=${code})`);
-        setTimeout(async () => {
-            const h = await checkServerHealth();
-            if (h.status === "ok") {
-                logger.info(SRC, "Server process exitted but server is still healthy");
-                serverCrashCount = 0;
+    if (currentExecutor === "velocity") {
+        const psArgList = args.map((a) => `'${a}'`).join(", ");
+        const psCmd = `Start-Process -FilePath '${exe}' -ArgumentList ${psArgList} -Verb RunAs -WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id`;
+        logger.info(SRC, `Spawning server elevated`);
+        try {
+            const output = execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { encoding: "utf-8", timeout: 15000 }).trim();
+            const pid = parseInt(output, 10);
+            if (!isNaN(pid)) {
+                serverProcess = { pid } as ChildProcess;
+                logger.info(SRC, `Server started with PID ${pid}`);
             } else {
-                serverProcess = null;
-                serverCrashCount++;
-                logger.warn(SRC, `Server died unexpectedly (crash #${serverCrashCount}/${MAX_SERVER_CRASHES})`);
-                safeSend("app:serverDied");
-
-                if (serverCrashCount <= MAX_SERVER_CRASHES) {
-                    const delay = Math.min(serverCrashCount * 3000, 10000);
-                    logger.info(SRC, `Auto-restarting server in ${delay}ms (attempt ${serverCrashCount})`);
-                    safeSend("app:toast", { message: `Server crashed. Restarting in ${delay / 1000}s (${serverCrashCount}/${MAX_SERVER_CRASHES})...`, level: "warn" });
-                    if (serverRestartTimer) clearTimeout(serverRestartTimer);
-                    serverRestartTimer = setTimeout(async () => {
-                        const alive = await checkServerHealth();
-                        if (alive.status === "ok") {
-                            serverCrashCount = 0;
-                            return;
-                        }
-                        const r = await startServer();
-                        if (r.success) {
-                            serverCrashCount = 0;
-                            logger.info(SRC, "Server auto-restart successful");
-                            safeSend("app:toast", { message: "Server restarted successfully", level: "success" });
-                        } else {
-                            logger.error(SRC, `Server auto-restart failed: ${r.error}`);
-                            safeSend("app:toast", { message: `Server restart failed: ${r.error}`, level: "error" });
-                        }
-                    }, delay);
-                } else {
-                    logger.error(SRC, `Server crashed ${MAX_SERVER_CRASHES} times, giving up`);
-                    safeSend("app:toast", { message: `Server crashed ${MAX_SERVER_CRASHES} times. Please restart manually.`, level: "error" });
-                }
+                logger.warn(SRC, `Failed to parse server PID from: ${output}`);
             }
-        }, 1500);
-    });
+        } catch (e) {
+            logger.error(SRC, `Failed to start elevated server: ${(e as Error).message}`);
+            return { success: false, error: "Failed to start server as admin" };
+        }
+    } else {
+        serverProcess = spawn(exe, args, {
+            cwd: SERVER_DIR,
+            stdio: "pipe",
+            windowsHide: true,
+        });
+    }
+
+    if (serverProcess) {
+        serverProcess.stdout?.on("data", (d: Buffer) => {
+            const m = d.toString().trim();
+            if (m) logger.info("Server", m);
+        });
+        serverProcess.stderr?.on("data", (d: Buffer) => {
+            const m = d.toString().trim();
+            if (m) logger.warn("Server", m);
+        });
+        serverProcess.on("exit", (code) => {
+            logger.info(SRC, `Server exitted (code=${code})`);
+            setTimeout(async () => {
+                const h = await checkServerHealth();
+                if (h.status === "ok") {
+                    logger.info(SRC, "Server process exitted but server is still healthy");
+                    serverCrashCount = 0;
+                } else {
+                    serverProcess = null;
+                    serverCrashCount++;
+                    logger.warn(SRC, `Server died unexpectedly (crash #${serverCrashCount}/${MAX_SERVER_CRASHES})`);
+                    safeSend("app:serverDied");
+
+                    if (serverCrashCount <= MAX_SERVER_CRASHES) {
+                        const delay = Math.min(serverCrashCount * 3000, 10000);
+                        logger.info(SRC, `Auto-restarting server in ${delay}ms (attempt ${serverCrashCount})`);
+                        safeSend("app:toast", { message: `Server crashed. Restarting in ${delay / 1000}s (${serverCrashCount}/${MAX_SERVER_CRASHES})...`, level: "warn" });
+                        if (serverRestartTimer) clearTimeout(serverRestartTimer);
+                        serverRestartTimer = setTimeout(async () => {
+                            const alive = await checkServerHealth();
+                            if (alive.status === "ok") {
+                                serverCrashCount = 0;
+                                return;
+                            }
+                            const r = await startServer();
+                            if (r.success) {
+                                serverCrashCount = 0;
+                                logger.info(SRC, "Server auto-restart successful");
+                                safeSend("app:toast", { message: "Server restarted successfully", level: "success" });
+                            } else {
+                                logger.error(SRC, `Server auto-restart failed: ${r.error}`);
+                                safeSend("app:toast", { message: `Server restart failed: ${r.error}`, level: "error" });
+                            }
+                        }, delay);
+                    } else {
+                        logger.error(SRC, `Server crashed ${MAX_SERVER_CRASHES} times, giving up`);
+                        safeSend("app:toast", { message: `Server crashed ${MAX_SERVER_CRASHES} times. Please restart manually.`, level: "error" });
+                    }
+                }
+            }, 1500);
+        });
+    }
 
     for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 1000));
@@ -228,7 +259,7 @@ function stopServer(): void {
         serverProcess = null;
     }
     try {
-        execSync("taskkill /F /IM RenegadeServer.exe 2>nul", { timeout: 3000, windowsHide: true });
+        execSync("taskkill /F /T /IM RenegadeServer.exe 2>nul", { timeout: 3000, windowsHide: true });
         logger.info(SRC, "Server stopped via taskkill");
     } catch { /* ignore */ }
 }
@@ -383,6 +414,23 @@ const registerIpcHandlers = () => {
     });
     ipcMain.handle("app:attach", async () => {
         try {
+            if (currentExecutor === "velocity") {
+                const processes = getRobloxProcesses();
+                if (processes.length === 0) {
+                    safeSend("app:toast", { message: "No Roblox process found", level: "warn" });
+                    return false;
+                }
+                const pid = processes[0].pid;
+                const result = await serverRequest("/velocity/attach", "POST", JSON.stringify({ pid }));
+                const ok = result.success === true && result.status === "Attached";
+                if (ok) {
+                    logger.info(SRC, `Velocity attach successful (PID ${pid})`);
+                } else {
+                    logger.warn(SRC, `Velocity attach returned: ${result.status}`);
+                    safeSend("app:toast", { message: `Velocity attach: ${result.status}`, level: "warn" });
+                }
+                return ok;
+            }
             await serverRequest("/attach", "POST");
             logger.info(SRC, "Attach successful");
             return true;
@@ -403,6 +451,15 @@ const registerIpcHandlers = () => {
     });
     ipcMain.handle("app:execute", async (_e, script: string, pids: number[]) => {
         try {
+            if (currentExecutor === "velocity") {
+                const result = await serverRequest("/velocity/execute", "POST", JSON.stringify({ script }));
+                const ok = result.success === true;
+                if (!ok) {
+                    logger.warn(SRC, `Velocity execute failed: ${result.status}`);
+                    safeSend("app:toast", { message: `Velocity execute: ${result.status}`, level: "warn" });
+                }
+                return { success: ok, error: result.status };
+            }
             const result = await serverRequest("/execute", "POST", JSON.stringify({ script, pids }));
             const ok = result.success === true;
             if (!ok) {
@@ -539,6 +596,25 @@ const registerIpcHandlers = () => {
         return data;
     });
 
+    const FAVORITES_FILE = "favorites.json";
+    const getFavoritesPath = () => join(app.getPath("userData"), FAVORITES_FILE);
+    const loadFavorites = (): unknown[] => {
+        try {
+            const p = getFavoritesPath();
+            if (!existsSync(p)) return [];
+            return JSON.parse(readFileSync(p, "utf-8"));
+        } catch { return []; }
+    };
+    const saveFavorites = (data: unknown[]) => {
+        writeFileSync(getFavoritesPath(), JSON.stringify(data, null, 2), "utf-8");
+    };
+
+    ipcMain.handle("favorites:load", () => loadFavorites());
+    ipcMain.handle("favorites:save", (_e, favorites: unknown[]) => {
+        saveFavorites(favorites);
+        return { success: true };
+    });
+
     ipcMain.handle("app:getAppVersion", () => getAppVersion());
     ipcMain.handle("app:checkForAppUpdate", async () => {
         try {
@@ -584,6 +660,81 @@ const registerIpcHandlers = () => {
         const { shell } = await import("electron");
         shell.openPath(logger.getLogDir());
     });
+
+    ipcMain.handle("app:setExecutor", (_e, executor: "xeno" | "velocity") => {
+        currentExecutor = executor;
+        logger.info(SRC, `Executor set to: ${executor}`);
+    });
+
+    const executorStatusCache = new Map<string, { data: { status: string; reason: string }; ts: number }>();
+    ipcMain.handle("app:getExecutorStatus", async (_e, executor: "xeno" | "velocity") => {
+        const url = executor === "velocity"
+            ? "https://raw.githubusercontent.com/cookingsometimes/data-for-somethings-idk/main/renegade/velocity/status.json"
+            : "https://raw.githubusercontent.com/cookingsometimes/data-for-somethings-idk/main/renegade/xeno/status.json";
+        const cached = executorStatusCache.get(executor);
+        if (cached && Date.now() - cached.ts < 300000) return cached.data;
+        try {
+            const data = await fetchJson(url) as { status: string; reason: string };
+            if (data && data.status) {
+                executorStatusCache.set(executor, { data, ts: Date.now() });
+                return data;
+            }
+        } catch { /* ignore */ }
+        return null;
+    });
+
+    ipcMain.handle("velocity:status", async () => {
+        try {
+            return await serverRequest("/velocity/status");
+        } catch {
+            return { available: false, initialized: false, version: "unknown", state: "unknown", injectedPids: [] };
+        }
+    });
+    ipcMain.handle("velocity:start", async () => {
+        try {
+            return await serverRequest("/velocity/start", "POST");
+        } catch (e) {
+            logger.error(SRC, "Velocity start failed", e instanceof Error ? e : undefined);
+            return { success: false };
+        }
+    });
+    ipcMain.handle("velocity:stop", async () => {
+        try {
+            return await serverRequest("/velocity/stop", "POST");
+        } catch (e) {
+            logger.error(SRC, "Velocity stop failed", e instanceof Error ? e : undefined);
+            return { success: false };
+        }
+    });
+    ipcMain.handle("velocity:attach", async (_e, pid: number) => {
+        try {
+            return await serverRequest("/velocity/attach", "POST", JSON.stringify({ pid }));
+        } catch (e) {
+            logger.error(SRC, "Velocity attach failed", e instanceof Error ? e : undefined);
+            safeSend("app:toast", { message: "Velocity attach failed", level: "error" });
+            return { success: false, status: "error" };
+        }
+    });
+    ipcMain.handle("velocity:execute", async (_e, script: string) => {
+        try {
+            return await serverRequest("/velocity/execute", "POST", JSON.stringify({ script }));
+        } catch (e) {
+            logger.error(SRC, "Velocity execute failed", e instanceof Error ? e : undefined);
+            return { success: false, status: "error" };
+        }
+    });
+    ipcMain.handle("app:downloadVelocity", async () => {
+        return await downloadVelocity();
+    });
+    ipcMain.handle("app:isVelocityInstalled", () => {
+        return isVelocityInstalled();
+    });
+    ipcMain.handle("app:getVelocityVersion", () => {
+        return getVelocityVersionFile();
+    });
+    ipcMain.handle("app:getVelocityDir", () => {
+        return VELOCITY_DIR;
+    });
 };
 
 function getRobloxProcesses(): Array<{ pid: number; name: string }> {
@@ -620,7 +771,7 @@ nativeTheme.addListener("updated", () => {
                     "default-src 'self'; " +
                     "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
                     "style-src 'self' 'unsafe-inline'; " +
-                    "img-src 'self' data: blob:; " +
+                    "img-src 'self' data: blob: https://scriptblox.com https://*.scriptblox.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://cdn.discordapp.com https://www.xeno.now; " +
                     "worker-src 'self' blob:; " +
                     "connect-src 'self' http://127.0.0.1:* https://sumi-api.netlify.app https://encrypted-bytes.com https://cdnjs.cloudflare.com https://scriptblox.com; " +
                     "font-src 'self' https://cdnjs.cloudflare.com;"

@@ -1,4 +1,4 @@
-import type { PageId } from "@common/types";
+import type { PageId, ExecutorType } from "@common/types";
 import "./Sidebar.css";
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
     clientCount: number;
     collapsed: boolean;
     onToggleCollapse: () => void;
+    executor: ExecutorType;
+    velocityStatus: { available: boolean; initialized: boolean; version: string; state: string; injectedPids: number[] };
 }
 
 const NAV_ITEMS: { id: PageId; label: string; icon: string }[] = [
@@ -25,7 +27,7 @@ const SETTINGS_ITEMS: { id: PageId; label: string; icon: string }[] = [
     { id: "about", label: "About", icon: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
 ];
 
-export const Sidebar = ({ activePage, onPageChange, serverRunning, serverVersion, clientCount, collapsed, onToggleCollapse }: Props) => {
+export const Sidebar = ({ activePage, onPageChange, serverRunning, serverVersion, clientCount, collapsed, onToggleCollapse, executor, velocityStatus }: Props) => {
     return (
         <div className={`sidebar ${collapsed ? "collapsed" : ""}`}>
             <div className="sidebar-section">
@@ -87,6 +89,14 @@ export const Sidebar = ({ activePage, onPageChange, serverRunning, serverVersion
                         {serverRunning ? `${serverVersion || "?"}` : "Offline"}
                     </span>
                 </div>
+                {!collapsed && (
+                    <div className="sidebar-executor-badge" data-executor={executor}>
+                        {executor === "xeno" ? "Xeno" : "Velocity"}
+                        {executor === "velocity" && velocityStatus.state === "Attached" && (
+                            <span className="sidebar-velocity-dot" />
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

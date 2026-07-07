@@ -1,127 +1,187 @@
 .dashboard {
-    padding: 28px;
+    padding: 24px;
     height: 100%;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 18px;
+    animation: fadeIn 350ms ease forwards;
 }
 
-.dashboard-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.dashboard-greeting {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.dashboard-sub {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin-top: 2px;
-}
-
-.dashboard-cards {
+.dashboard-top {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 14px;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 18px;
 }
 
-.dash-card {
+/* Welcome Card */
+.dash-welcome-card {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 20px;
+    padding: 24px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-}
-
-.dash-card-header {
-    display: flex;
-    align-items: center;
     justify-content: space-between;
+    gap: 18px;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+    animation: fadeIn 300ms ease 0ms backwards;
 }
 
-.dash-card-label {
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-tertiary);
+.dash-welcome-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
-.dash-card-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-sm);
+.dash-welcome-text {
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
 }
 
-.dash-card-value {
-    font-size: 26px;
+.dash-welcome-title {
+    font-size: 20px;
     font-weight: 700;
     color: var(--text-primary);
+    animation: fadeIn 300ms ease 100ms backwards;
 }
 
-.dash-card-sub {
-    font-size: 12px;
+.dash-welcome-sub {
+    font-size: 13px;
     color: var(--text-secondary);
+    animation: fadeIn 300ms ease 150ms backwards;
 }
 
-.action-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+.dash-welcome-actions {
+    display: flex;
+    gap: 10px;
+    animation: fadeIn 300ms ease 200ms backwards;
 }
 
-.action-btn {
+.dash-action-btn {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 16px 18px;
-    border-radius: var(--radius-lg);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
     font-size: 13px;
     font-weight: 600;
-    text-align: left;
+    border: none;
+    cursor: pointer;
+    transition: background 180ms ease, box-shadow 180ms ease;
 }
 
-.action-btn:hover {
+.dash-action-btn.cyan {
+    background: #00bcd4;
+    color: #fff;
+}
+
+.dash-action-btn.cyan:hover {
+    background: #00a5bb;
+    box-shadow: 0 4px 16px rgba(0, 188, 212, 0.3);
+}
+
+.dash-action-btn.dark {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.dash-action-btn.dark:hover {
     background: var(--bg-hover);
     border-color: var(--border-strong);
 }
 
-.action-btn.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
+/* Status Card */
+.dash-status-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+    animation: fadeIn 300ms ease 80ms backwards;
 }
 
-.action-btn.primary:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
+.dash-status-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
-.action-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-md);
+.dash-status-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+}
+
+.dash-status-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dash-status-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: var(--bg-tertiary);
-    flex-shrink: 0;
+    justify-content: space-between;
+    transition: background 150ms ease;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    margin: 0 -8px;
 }
 
-.action-btn.primary .action-icon {
-    background: rgba(255, 255, 255, 0.15);
+.dash-status-row:hover {
+    background: var(--bg-tertiary);
+}
+
+.dash-status-key {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.dash-status-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    transition: color 200ms ease;
+}
+
+.dash-status-value.online {
+    color: var(--success, #22c55e);
+}
+
+.dash-status-value.offline {
+    color: var(--text-tertiary);
+}
+
+.executor-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.executor-xeno {
+    color: #7c5cff;
+}
+
+.executor-velocity {
+    color: #ff9f0a;
+}
+
+.exec-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.exec-badge.exp {
+    background: rgba(255, 159, 10, 0.15);
+    color: #ff9f0a;
 }

@@ -60,6 +60,17 @@ export type XenoStatus = {
 
 export type PanelPosition = { x: number; y: number; width: number; height: number };
 
+export type ExecutorType = "xeno" | "velocity";
+
+export type FavoriteScript = {
+    id: string;
+    title: string;
+    game: string;
+    slug: string;
+    script: string;
+    addedAt: number;
+};
+
 export type AppState = {
     activePage: PageId;
     uiMode: UiMode;
@@ -72,4 +83,5 @@ export type AppState = {
     sidebarPosition: SidebarPosition;
     openPanels: string[];
     panelPositions: Record<string, PanelPosition>;
+    executor: ExecutorType;
 };

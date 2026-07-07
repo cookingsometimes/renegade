@@ -5,17 +5,41 @@
     display: flex;
     flex-direction: column;
     gap: 24px;
+    animation: fadeIn 350ms ease forwards;
 }
 
 .downloads-header {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    animation: fadeIn 200ms ease backwards;
 }
 
 .downloads-subtitle {
     font-size: 13px;
     color: var(--text-secondary);
+}
+
+.downloads-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.downloads-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    padding-left: 2px;
+}
+
+.downloads-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
 }
 
 .downloads-grid {
@@ -32,10 +56,16 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    animation: fadeIn 250ms ease backwards;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
-.download-card.update-card {
-    grid-column: 1 / -1;
+.download-card:nth-child(1) { animation-delay: 0ms; }
+.download-card:nth-child(2) { animation-delay: 60ms; }
+
+.download-card:hover {
+    border-color: rgba(124, 92, 255, 0.15);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 
 .download-card-header {
@@ -67,6 +97,36 @@
 .download-card-icon.update {
     background: var(--warning-subtle);
     color: var(--warning);
+}
+
+.download-card-icon.velocity {
+    background: rgba(255, 159, 10, 0.1);
+    color: #ff9f0a;
+}
+
+.download-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.download-card-img.rounded {
+    border-radius: 50%;
+}
+
+.download-progress-fill.velocity {
+    background: linear-gradient(90deg, #ff9f0a, #ffb340);
+}
+
+.download-btn.primary.velocity {
+    background: rgba(255, 159, 10, 0.12);
+    color: #ff9f0a;
+    border: 1px solid rgba(255, 159, 10, 0.25);
+}
+
+.download-btn.primary.velocity:hover {
+    background: rgba(255, 159, 10, 0.22);
+    border-color: rgba(255, 159, 10, 0.4);
 }
 
 .download-card-info {
@@ -192,11 +252,13 @@
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 600;
+    transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 .download-btn:hover:not(:disabled) {
     background: var(--bg-hover);
     color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .download-btn:disabled {
@@ -211,6 +273,7 @@
 
 .download-btn.primary:hover:not(:disabled) {
     background: var(--accent-hover);
+    box-shadow: 0 2px 12px rgba(124, 92, 255, 0.3);
 }
 
 .download-btn.primary.small {
@@ -243,4 +306,5 @@
     color: var(--success);
     font-size: 13px;
     font-weight: 500;
+    animation: fadeIn 300ms ease backwards;
 }

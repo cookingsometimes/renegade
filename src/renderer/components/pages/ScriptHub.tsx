@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SavedScript, ScriptBloxScript, ScriptHubTab } from "@common/types";
+import type { FavoriteScript, SavedScript, ScriptBloxScript, ScriptHubTab } from "@common/types";
 import "./ScriptHub.css";
 
 const DEBOUNCE_MS = 400;
@@ -22,6 +22,8 @@ export const ScriptHub = () => {
     const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
+    const [favorites, setFavorites] = useState<FavoriteScript[]>([]);
+
     const showToast = useCallback((msg: string) => {
         setToast(msg);
         setTimeout(() => setToast(null), 2000);
@@ -34,7 +36,14 @@ export const ScriptHub = () => {
         } catch { /* ignore */ }
     }, []);
 
-    useEffect(() => { loadLocalScripts(); }, [loadLocalScripts]);
+    const loadFavorites = useCallback(async () => {
+        try {
+            const favs = await window.ContextBridge.loadFavorites();
+            setFavorites(favs as FavoriteScript[]);
+        } catch { /* ignore */ }
+    }, []);
+
+    useEffect(() => { loadLocalScripts(); loadFavorites(); }, [loadLocalScripts, loadFavorites]);
 
     useEffect(() => {
         if (tab === "online" && searchResults.length === 0 && !searchQuery) {
@@ -146,6 +155,27 @@ export const ScriptHub = () => {
             setLocalContent("");
         }
         loadLocalScripts();
+    };
+
+    const isFavorite = (id: string) => favorites.some((f) => f.id === id);
+
+    const toggleFavorite = async (script: ScriptBloxScript) => {
+        let next: FavoriteScript[];
+        if (isFavorite(script._id)) {
+            next = favorites.filter((f) => f.id !== script._id);
+        } else {
+            const fav: FavoriteScript = {
+                id: script._id,
+                title: script.title,
+                game: script.game?.name ?? "",
+                slug: script.slug,
+                script: script.script ?? "",
+                addedAt: Date.now(),
+            };
+            next = [...favorites, fav];
+        }
+        setFavorites(next);
+        await window.ContextBridge.saveFavorites(next);
     };
 
     const formatViews = (n: number) => {
@@ -270,7 +300,9 @@ export const ScriptHub = () => {
                                     onClick={() => handleSelectOnline(s)}
                                 >
                                     <div className="script-result-thumb">
-                                        {s.game?.imageUrl ? (
+                                        {s.image ? (
+                                            <img src={s.image} alt="" className="script-result-img" />
+                                        ) : s.game?.imageUrl ? (
                                             <img src={s.game.imageUrl} alt="" className="script-result-img" />
                                         ) : (
                                             <div className="script-result-placeholder">
@@ -291,6 +323,15 @@ export const ScriptHub = () => {
                                             {s.isPatched && <span className="script-result-badge patched">Patched</span>}
                                         </div>
                                     </div>
+                                    <button
+                                        className={`script-result-fav ${isFavorite(s._id) ? "active" : ""}`}
+                                        onClick={(e) => { e.stopPropagation(); toggleFavorite(s); }}
+                                        title={isFavorite(s._id) ? "Remove from favorites" : "Add to favorites"}
+                                    >
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill={isFavorite(s._id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                        </svg>
+                                    </button>
                                 </div>
                             ))}
                             {hasMore && !searchLoading && (
@@ -312,6 +353,15 @@ export const ScriptHub = () => {
                                             {selectedOnline.verified && (
                                                 <svg className="scripts-preview-verified" width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)" stroke="none"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                                             )}
+                                            <button
+                                                className={`scripts-preview-fav ${isFavorite(selectedOnline._id) ? "active" : ""}`}
+                                                onClick={() => toggleFavorite(selectedOnline)}
+                                                title={isFavorite(selectedOnline._id) ? "Remove from favorites" : "Add to favorites"}
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill={isFavorite(selectedOnline._id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                                </svg>
+                                            </button>
                                         </div>
                                         <span className="scripts-preview-game">{selectedOnline.game?.name ?? "Universal"}</span>
                                         <div className="scripts-preview-stats">

@@ -4,6 +4,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    animation: fadeIn 350ms ease forwards;
 }
 
 .page-logs .page-header {
@@ -11,6 +12,7 @@
     align-items: center;
     gap: 16px;
     margin-bottom: 16px;
+    animation: fadeIn 200ms ease backwards;
 }
 
 .logs-folder-btn {
@@ -25,11 +27,13 @@
     font-size: 12px;
     cursor: pointer;
     flex-shrink: 0;
+    transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 .logs-folder-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .logs-filter {
@@ -42,11 +46,13 @@
     font-size: 12px;
     width: 200px;
     margin-left: auto;
+    transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .logs-filter:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .logs-list {
@@ -62,6 +68,7 @@
     text-align: center;
     color: var(--text-tertiary);
     font-size: 13px;
+    animation: fadeIn 300ms ease backwards;
 }
 
 .log-entry {
@@ -72,10 +79,12 @@
     border-radius: var(--radius-sm);
     font-size: 12px;
     font-family: var(--font-mono);
+    transition: background 120ms ease, padding-left 180ms ease;
 }
 
 .log-entry:hover {
     background: var(--bg-hover);
+    padding-left: 14px;
 }
 
 .log-time {

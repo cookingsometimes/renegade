@@ -35,6 +35,7 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 20px rgba(124, 92, 255, 0.15);
 
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
@@ -51,6 +52,10 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
 }
 
 html, body, #root {
@@ -82,10 +87,11 @@ html, body, #root {
 ::-webkit-scrollbar-thumb {
     background: var(--bg-hover);
     border-radius: var(--radius-full);
+    transition: background 200ms ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--bg-active);
+    background: var(--accent);
 }
 
 input, textarea {
@@ -96,13 +102,18 @@ input, textarea {
     border-radius: var(--radius-md);
     padding: 10px 14px;
     outline: none;
-    transition: border-color var(--transition-fast);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
     width: 100%;
 }
 
 input:focus, textarea:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-subtle);
+    box-shadow: 0 0 0 3px var(--accent-subtle), var(--shadow-glow);
+    background: var(--bg-elevated);
+}
+
+input:hover:not(:focus), textarea:hover:not(:focus) {
+    border-color: var(--border-strong);
 }
 
 button {
@@ -110,13 +121,63 @@ button {
     cursor: pointer;
     border: none;
     outline: none;
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast);
 }
 
-button:active {
-    transform: scale(0.97);
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
+/* Page entrance animation */
+@keyframes pageEnter {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Stagger children animation */
+@keyframes staggerFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Glow pulse for status indicators */
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 4px currentColor; }
+    50% { box-shadow: 0 0 12px currentColor; }
+}
+
+/* Breathing animation (opacity only) */
+@keyframes breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Skeleton loading */
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 50%, var(--bg-tertiary) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+}
+
+/* Spin animation */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Fade in (opacity only) */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Toast animations (opacity only) */
 .toast-container {
     position: absolute;
     bottom: 20px;
@@ -138,44 +199,71 @@ button:active {
     border-radius: var(--radius-md);
     font-size: 13px;
     font-weight: 600;
-    animation: toastIn 300ms ease, toastOut 300ms ease 4.7s forwards;
+    animation: toastIn 400ms ease, toastOut 300ms ease 4.7s forwards;
     white-space: nowrap;
+    backdrop-filter: blur(12px);
 }
 
 .toast-success {
     background: var(--success-subtle);
     border: 1px solid rgba(52, 211, 153, 0.3);
     color: var(--success);
+    box-shadow: 0 4px 20px rgba(52, 211, 153, 0.15);
 }
 
 .toast-error {
     background: var(--error-subtle);
     border: 1px solid rgba(248, 113, 113, 0.3);
     color: var(--error);
+    box-shadow: 0 4px 20px rgba(248, 113, 113, 0.15);
 }
 
 .toast-warn {
     background: var(--warning-subtle);
     border: 1px solid rgba(251, 191, 36, 0.3);
     color: var(--warning);
+    box-shadow: 0 4px 20px rgba(251, 191, 36, 0.15);
 }
 
 .toast-info {
     background: var(--accent-subtle);
     border: 1px solid rgba(124, 92, 255, 0.3);
     color: var(--accent);
+    box-shadow: 0 4px 20px rgba(124, 92, 255, 0.15);
 }
 
 @keyframes toastIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 @keyframes toastOut {
-    from { opacity: 1; transform: translateY(0); }
-    to { opacity: 0; transform: translateY(10px); }
+    from { opacity: 1; }
+    to { opacity: 0; }
 }
 
+/* Ripple effect on buttons */
+.ripple {
+    position: relative;
+    overflow: hidden;
+}
+
+.ripple::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255, 255, 255, 0.15) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+}
+
+.ripple:active::after {
+    opacity: 1;
+    transition: opacity 0ms;
+}
+
+/* Overlay mode */
 html.overlay-mode,
 body.overlay-mode,
 body.overlay-mode body,

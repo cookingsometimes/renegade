@@ -92,6 +92,8 @@ export type ContextBridge = {
     searchScriptblox: (query: string, page: number) => Promise<ScriptBloxSearchResponse>;
     trendingScriptblox: () => Promise<ScriptBloxSearchResponse>;
     scriptbloxSource: (slug: string) => Promise<ScriptBloxScriptDetail>;
+    loadFavorites: () => Promise<unknown[]>;
+    saveFavorites: (favorites: unknown[]) => Promise<{ success: boolean }>;
     onNativeThemeChanged: (cb: (dark: boolean) => void) => void;
     minimize: () => void;
     maximize: () => void;
@@ -115,4 +117,16 @@ export type ContextBridge = {
     log: (level: string, source: string, message: string) => void;
     onToast: (cb: (data: ToastData) => void) => void;
     openLogsFolder: () => Promise<void>;
+    getVelocityStatus: () => Promise<{ available: boolean; initialized: boolean; version: string; state: string; injectedPids: number[] }>;
+    velocityAttach: (pid: number) => Promise<{ success: boolean; status: string }>;
+    velocityExecute: (script: string) => Promise<{ success: boolean; status: string }>;
+    velocityStart: () => Promise<{ success: boolean }>;
+    velocityStop: () => Promise<{ success: boolean }>;
+    setExecutor: (executor: "xeno" | "velocity") => Promise<void>;
+    getExecutorStatus: (executor: "xeno" | "velocity") => Promise<{ status: string; reason: string } | null>;
+    downloadVelocity: () => Promise<{ success: boolean; version?: string; error?: string }>;
+    isVelocityInstalled: () => Promise<boolean>;
+    getVelocityVersion: () => Promise<string>;
+    onVelocityProgress: (cb: (p: { phase: string; bytesReceived: number; totalBytes: number }) => void) => void;
+    onVelocityRetry: (cb: (data: { attempt: number; max: number; retrying?: boolean; error?: string }) => void) => void;
 };
